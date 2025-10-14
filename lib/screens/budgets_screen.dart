@@ -68,23 +68,115 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
                   keyForRemaining = keys.isNotEmpty ? keys.last : nowKey;
                 }
                 final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
-                return ListTile(
-                  title: Text(b.title),
-                  subtitle: Text(
-                    'Amount: ${fmt.format(b.amount)} Rwf • Remaining: ${fmt.format(b.remainingUpTo(keyForRemaining))} Rwf',
+                return Dismissible(
+                  key: Key(b.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 16),
+                    child: const Icon(Icons.delete, color: Colors.white),
                   ),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => BudgetDetailScreen(
-                        budget: b,
-                        onChanged: (updated) async {
-                          // replace in list and persist
-                          setState(() {
-                            _budgets[i] = updated;
-                          });
-                          await Storage.saveBudgets(_budgets);
-                        },
+                  confirmDismiss: (direction) async {
+                    return await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Delete Budget'),
+                            content: Text(
+                              'Are you sure you want to delete "${b.title}"?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(false),
+                                child: const Text('CANCEL'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(true),
+                                child: const Text('DELETE'),
+                              ),
+                            ],
+                          ),
+                        ) ??
+                        false;
+                  },
+                  onDismissed: (direction) async {
+                    setState(() => _budgets.removeAt(i));
+                    await Storage.deleteBudget(b.id);
+                  },
+                  child: ListTile(
+                    title: Text(b.title),
+                    subtitle: Text(
+                      'Amount: ${fmt.format(b.amount)} Rwf • Remaining: ${fmt.format(b.remainingUpTo(keyForRemaining))} Rwf',
+                    ),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => BudgetDetailScreen(
+                          budget: b,
+                          onChanged: (updated) async {
+                            // replace in list and persist
+                            setState(() {
+                              _budgets[i] = updated;
+                            });
+                            await Storage.saveBudgets(_budgets);
+                          },
+                        ),
                       ),
+                    ),
+                    trailing: PopupMenuButton(
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete'),
+                        ),
+                      ],
+                      onSelected: (value) async {
+                        if (value == 'edit') {
+                          final updated = await Navigator.of(context)
+                              .push<Budget>(
+                                MaterialPageRoute(
+                                  builder: (_) => CreateBudgetScreen(budget: b),
+                                ),
+                              );
+                          if (updated != null) {
+                            // Preserve existing items when updating budget
+                            updated.items = b.items;
+                            setState(() => _budgets[i] = updated);
+                            await Storage.updateBudget(updated);
+                          }
+                        } else if (value == 'delete') {
+                          final confirmed =
+                              await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Delete Budget'),
+                                  content: Text(
+                                    'Are you sure you want to delete "${b.title}"?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(false),
+                                      child: const Text('CANCEL'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(true),
+                                      child: const Text('DELETE'),
+                                    ),
+                                  ],
+                                ),
+                              ) ??
+                              false;
+
+                          if (confirmed) {
+                            setState(() => _budgets.removeAt(i));
+                            await Storage.deleteBudget(b.id);
+                          }
+                        }
+                      },
                     ),
                   ),
                 );

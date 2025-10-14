@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/budget.dart';
 import '../models/budget_item.dart';
 import 'item_detail_screen.dart';
+import 'edit_item_dialog.dart';
 
 class BudgetDetailScreen extends StatefulWidget {
   final Budget budget;
@@ -178,19 +179,82 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                         : (it.oneTimeAmount != null
                               ? 'One-time: ${fmt.format(it.oneTimeAmount)} Rwf'
                               : '');
-                    return ListTile(
-                      title: Text(it.name),
-                      subtitle: Text(label),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ItemDetailScreen(
-                            budget: _budget,
-                            item: it,
-                            onChanged: (updated) {
-                              setState(() => _budget = updated);
-                              widget.onChanged?.call(_budget);
-                            },
+                    return Dismissible(
+                      key: Key(it.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        color: Colors.red,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 16),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      confirmDismiss: (direction) async {
+                        return await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Delete Item'),
+                                content: Text(
+                                  'Are you sure you want to delete "${it.name}"?',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
+                                    child: const Text('CANCEL'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(true),
+                                    child: const Text('DELETE'),
+                                  ),
+                                ],
+                              ),
+                            ) ??
+                            false;
+                      },
+                      onDismissed: (direction) {
+                        setState(() {
+                          _budget.items.removeWhere((item) => item.id == it.id);
+                        });
+                        widget.onChanged?.call(_budget);
+                      },
+                      child: ListTile(
+                        title: Text(it.name),
+                        subtitle: Text(label),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit),
+                              onPressed: () async {
+                                await showEditItemDialog(context, it, (
+                                  updatedItem,
+                                ) {
+                                  setState(() {
+                                    final index = _budget.items.indexWhere(
+                                      (item) => item.id == it.id,
+                                    );
+                                    if (index != -1) {
+                                      _budget.items[index] = updatedItem;
+                                    }
+                                  });
+                                  widget.onChanged?.call(_budget);
+                                });
+                              },
+                            ),
+                            const Icon(Icons.chevron_right),
+                          ],
+                        ),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ItemDetailScreen(
+                              budget: _budget,
+                              item: it,
+                              onChanged: (updated) {
+                                setState(() => _budget = updated);
+                                widget.onChanged?.call(_budget);
+                              },
+                            ),
                           ),
                         ),
                       ),

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-// lightweight id generation (milliseconds since epoch) -- avoids extra dependency
 import '../models/budget.dart';
 
 class CreateBudgetScreen extends StatefulWidget {
-  const CreateBudgetScreen({super.key});
+  final Budget? budget;
+
+  const CreateBudgetScreen({super.key, this.budget});
 
   @override
   State<CreateBudgetScreen> createState() => _CreateBudgetScreenState();
@@ -17,6 +18,18 @@ class _CreateBudgetScreenState extends State<CreateBudgetScreen> {
   final _numberFormat = NumberFormat('#,###');
   DateTime? _start;
   DateTime? _end;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.budget != null) {
+      // Initialize with existing budget data
+      _titleCtrl.text = widget.budget!.title;
+      _amountCtrl.text = _numberFormat.format(widget.budget!.amount);
+      _start = widget.budget!.start;
+      _end = widget.budget!.end;
+    }
+  }
 
   @override
   void dispose() {
@@ -50,7 +63,8 @@ class _CreateBudgetScreenState extends State<CreateBudgetScreen> {
   void _submit() {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_start == null || _end == null) return;
-    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final id =
+        widget.budget?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
     final b = Budget(
       id: id,
       title: _titleCtrl.text.trim(),
@@ -64,7 +78,9 @@ class _CreateBudgetScreenState extends State<CreateBudgetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create budget')),
+      appBar: AppBar(
+        title: Text(widget.budget == null ? 'Create Budget' : 'Edit Budget'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
