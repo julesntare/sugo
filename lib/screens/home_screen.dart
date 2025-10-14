@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../widgets/app_theme.dart';
-import 'forecast_screen.dart';
 import 'budgets_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -36,15 +35,6 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ForecastScreen()),
-                );
-              },
-              icon: const Icon(Icons.show_chart),
-              label: const Text('Create forecast'),
-            ),
             const SizedBox(height: 8),
             ElevatedButton.icon(
               onPressed: () => Navigator.of(
@@ -57,19 +47,14 @@ class HomeScreen extends StatelessWidget {
             const Expanded(
               child: Center(
                 child: Text(
-                  'No forecasts yet 14 tap "Create forecast" to begin.',
+                  'No budgets yet — tap "Budgets" to create your first budget.',
                 ),
               ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const ForecastScreen())),
-        child: const Icon(Icons.add),
-      ),
+      // FAB intentionally left for budgets screen
     );
   }
 }
