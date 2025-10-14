@@ -26,6 +26,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
   Future<void> _addItemDialog() async {
     final nameCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
+    final numberFormat = NumberFormat('#,###');
     String mode = 'one-time';
     String? oneTimeMonth = DateFormat('yyyy-MM').format(DateTime.now());
 
@@ -43,8 +44,26 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
               ),
               TextField(
                 controller: amountCtrl,
-                decoration: const InputDecoration(labelText: 'Amount'),
+                decoration: const InputDecoration(
+                  labelText: 'Amount',
+                  suffixText: 'Rwf',
+                ),
                 keyboardType: TextInputType.number,
+                onChanged: (value) {
+                  if (value.isEmpty) return;
+                  // Remove non-digits
+                  value = value.replaceAll(RegExp(r'[^\d]'), '');
+                  if (value.isEmpty) return;
+                  // Parse and format
+                  final number = int.tryParse(value) ?? 0;
+                  final formatted = numberFormat.format(number);
+                  amountCtrl.value = TextEditingValue(
+                    text: formatted,
+                    selection: TextSelection.collapsed(
+                      offset: formatted.length,
+                    ),
+                  );
+                },
               ),
               DropdownButton<String>(
                 value: mode,
@@ -76,10 +95,11 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                       firstDate: now.subtract(const Duration(days: 365)),
                       lastDate: now.add(const Duration(days: 3650)),
                     );
-                    if (d != null)
+                    if (d != null) {
                       dialogSetState(
                         () => oneTimeMonth = DateFormat('yyyy-MM').format(d),
                       );
+                    }
                   },
                   child: Text(
                     oneTimeMonth == null
@@ -97,7 +117,11 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
             ElevatedButton(
               onPressed: () {
                 final name = nameCtrl.text.trim();
-                final amount = double.tryParse(amountCtrl.text.trim()) ?? 0;
+                final amount =
+                    double.tryParse(
+                      amountCtrl.text.replaceAll(RegExp(r'[^\d]'), ''),
+                    ) ??
+                    0;
                 if (name.isEmpty || amount <= 0) return;
                 if (mode == 'one-time' &&
                     (oneTimeMonth == null || (oneTimeMonth?.isEmpty ?? true))) {
@@ -127,7 +151,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final months = _budget.monthKeys();
-    final fmt = NumberFormat.currency(symbol: 'Rwf ', decimalDigits: 0);
+    final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
 
     return Scaffold(
       appBar: AppBar(title: Text(_budget.title)),
@@ -150,9 +174,9 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                 else
                   ..._budget.items.map((it) {
                     final label = it.monthlyAmount != null
-                        ? 'Monthly: ${fmt.format(it.monthlyAmount)}'
+                        ? 'Monthly: ${fmt.format(it.monthlyAmount)} Rwf'
                         : (it.oneTimeAmount != null
-                              ? 'One-time: ${fmt.format(it.oneTimeAmount)}'
+                              ? 'One-time: ${fmt.format(it.oneTimeAmount)} Rwf'
                               : '');
                     return ListTile(
                       title: Text(it.name),
@@ -171,7 +195,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                         ),
                       ),
                     );
-                  }).toList(),
+                  }),
                 const SizedBox(height: 12),
               ],
             );
@@ -198,7 +222,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                   Text(key, style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 6),
                   Text(
-                    'Deductions: ${fmt.format(deductions)} • Remaining: ${fmt.format(remaining)}',
+                    'Deductions: ${fmt.format(deductions)} Rwf • Remaining: ${fmt.format(remaining)} Rwf',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const Divider(),
@@ -211,9 +235,9 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                         title: Text(it.name),
                         subtitle: Text(
                           it.monthlyAmount != null
-                              ? 'Monthly: ${fmt.format(it.monthlyAmount)}'
+                              ? 'Monthly: ${fmt.format(it.monthlyAmount)} Rwf'
                               : (it.oneTimeAmount != null
-                                    ? 'One-time: ${fmt.format(it.oneTimeAmount)}'
+                                    ? 'One-time: ${fmt.format(it.oneTimeAmount)} Rwf'
                                     : ''),
                         ),
                         trailing: Checkbox(
@@ -240,7 +264,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                           ),
                         ),
                       );
-                    }).toList(),
+                    }),
                 ],
               ),
             ),

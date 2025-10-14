@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 // lightweight id generation (milliseconds since epoch) -- avoids extra dependency
 import '../models/budget.dart';
 
@@ -12,7 +13,8 @@ class CreateBudgetScreen extends StatefulWidget {
 class _CreateBudgetScreenState extends State<CreateBudgetScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
-  final _amountCtrl = TextEditingController(text: '1000');
+  final _amountCtrl = TextEditingController(text: '0');
+  final _numberFormat = NumberFormat('#,###');
   DateTime? _start;
   DateTime? _end;
 
@@ -52,7 +54,7 @@ class _CreateBudgetScreenState extends State<CreateBudgetScreen> {
     final b = Budget(
       id: id,
       title: _titleCtrl.text.trim(),
-      amount: double.parse(_amountCtrl.text.trim()),
+      amount: double.parse(_amountCtrl.text.replaceAll(RegExp(r'[^\d]'), '')),
       start: _start!,
       end: _end!,
     );
@@ -77,11 +79,31 @@ class _CreateBudgetScreenState extends State<CreateBudgetScreen> {
               ),
               TextFormField(
                 controller: _amountCtrl,
-                decoration: const InputDecoration(labelText: 'Amount'),
+                decoration: const InputDecoration(
+                  labelText: 'Amount',
+                  suffixText: 'Rwf',
+                ),
                 keyboardType: TextInputType.number,
-                validator: (v) => (v == null || double.tryParse(v) == null)
-                    ? 'Enter amount'
-                    : null,
+                onChanged: (value) {
+                  if (value.isEmpty) return;
+                  // Remove non-digits
+                  value = value.replaceAll(RegExp(r'[^\d]'), '');
+                  if (value.isEmpty) return;
+                  // Parse and format
+                  final number = int.tryParse(value) ?? 0;
+                  final formatted = _numberFormat.format(number);
+                  _amountCtrl.value = TextEditingValue(
+                    text: formatted,
+                    selection: TextSelection.collapsed(
+                      offset: formatted.length,
+                    ),
+                  );
+                },
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Enter amount';
+                  final clean = v.replaceAll(RegExp(r'[^\d]'), '');
+                  return int.tryParse(clean) == null ? 'Invalid amount' : null;
+                },
               ),
               const SizedBox(height: 12),
               Row(

@@ -67,14 +67,11 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
                   // after end - show remaining after last month
                   keyForRemaining = keys.isNotEmpty ? keys.last : nowKey;
                 }
-                final fmt = NumberFormat.currency(
-                  symbol: 'Rwf ',
-                  decimalDigits: 0,
-                );
+                final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
                 return ListTile(
                   title: Text(b.title),
                   subtitle: Text(
-                    'Amount: ${fmt.format(b.amount)} • Remaining: ${fmt.format(b.remainingUpTo(keyForRemaining))}',
+                    'Amount: ${fmt.format(b.amount)} Rwf • Remaining: ${fmt.format(b.remainingUpTo(keyForRemaining))} Rwf',
                   ),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(

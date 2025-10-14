@@ -37,7 +37,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     final months = (_item.oneTimeMonth != null)
         ? (allMonths.contains(_item.oneTimeMonth) ? [_item.oneTimeMonth!] : [])
         : allMonths;
-    final fmt = NumberFormat.currency(symbol: 'Rwf ', decimalDigits: 0);
+    final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
     return Scaffold(
       appBar: AppBar(title: Text(_item.name)),
       body: ListView(
@@ -46,9 +46,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           final map = _budget.checklist[m] ?? {};
           final checked = map[_item.id] == true;
           final label = _item.monthlyAmount != null
-              ? 'Monthly: ${fmt.format(_item.monthlyAmount)}'
+              ? 'Monthly: ${fmt.format(_item.monthlyAmount)} Rwf'
               : (_item.oneTimeAmount != null
-                    ? 'One-time: ${fmt.format(_item.oneTimeAmount)}'
+                    ? 'One-time: ${fmt.format(_item.oneTimeAmount)} Rwf'
                     : '');
           return CheckboxListTile(
             title: Text(m),
