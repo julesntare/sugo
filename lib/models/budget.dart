@@ -7,7 +7,7 @@ class Budget {
   final double amount;
   final DateTime start;
   final DateTime end;
-  final List<BudgetItem> items;
+  List<BudgetItem> items; // Changed to non-final for SQLite loading
 
   /// per-month checklist state: key YYYY-MM -> itemId -> checked
   final Map<String, Map<String, bool>> checklist;
@@ -22,6 +22,30 @@ class Budget {
     Map<String, Map<String, bool>>? checklist,
   }) : items = List<BudgetItem>.from(items ?? <BudgetItem>[]),
        checklist = checklist ?? {};
+
+  // Convert Budget to Map for SQLite
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'amount': amount,
+      'start': start.toIso8601String(),
+      'end': end.toIso8601String(),
+    };
+  }
+
+  // Create Budget from Map (SQLite row)
+  static Budget fromMap(Map<String, dynamic> map) {
+    return Budget(
+      id: map['id'],
+      title: map['title'],
+      amount: map['amount'],
+      start: DateTime.parse(map['start']),
+      end: DateTime.parse(map['end']),
+      items: [], // Items will be loaded separately
+      checklist: {}, // Checklist will be loaded from shared preferences
+    );
+  }
 
   /// Returns list of month keys between start and end inclusive, formatted as YYYY-MM
   List<String> monthKeys() {
@@ -55,8 +79,9 @@ class Budget {
     double total = 0.0;
     for (final it in items) {
       if (it.monthlyAmount != null) total += it.monthlyAmount!;
-      if (it.oneTimeAmount != null && it.oneTimeMonth == monthKey)
+      if (it.oneTimeAmount != null && it.oneTimeMonth == monthKey) {
         total += it.oneTimeAmount!;
+      }
     }
     // subtract checked items in checklist for that month
     final monthChecks = checklist[monthKey];
@@ -64,10 +89,11 @@ class Budget {
       for (final it in items) {
         if (monthChecks[it.id] == true) {
           // If item has monthlyAmount, reduce monthlyAmount; else reduce oneTimeAmount if month matches
-          if (it.monthlyAmount != null)
+          if (it.monthlyAmount != null) {
             total -= it.monthlyAmount!;
-          else if (it.oneTimeAmount != null && it.oneTimeMonth == monthKey)
+          } else if (it.oneTimeAmount != null && it.oneTimeMonth == monthKey) {
             total -= it.oneTimeAmount!;
+          }
         }
       }
     }

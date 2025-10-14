@@ -35,13 +35,26 @@ class BudgetItem {
     );
   }
 
-  Map<String, dynamic> toJson() => {
+  // Convert to Map for SQLite
+  Map<String, dynamic> toMap() => {
     'id': id,
     'name': name,
-    'monthlyAmount': monthlyAmount,
-    'oneTimeAmount': oneTimeAmount,
-    'oneTimeMonth': oneTimeMonth,
+    'monthly_amount': monthlyAmount,
+    'one_time_amount': oneTimeAmount,
+    'one_time_month': oneTimeMonth,
   };
+
+  // Create from SQLite row
+  factory BudgetItem.fromMap(Map<String, dynamic> map) => BudgetItem(
+    id: map['id'] as String,
+    name: map['name'] as String,
+    monthlyAmount: (map['monthly_amount'] as num?)?.toDouble(),
+    oneTimeAmount: (map['one_time_amount'] as num?)?.toDouble(),
+    oneTimeMonth: map['one_time_month'] as String?,
+  );
+
+  // For backwards compatibility and JSON serialization
+  Map<String, dynamic> toJson() => toMap();
 
   factory BudgetItem.fromJson(Map<String, dynamic> json) => BudgetItem(
     id: json['id'] as String,
