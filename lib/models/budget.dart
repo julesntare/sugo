@@ -18,19 +18,34 @@ class Budget {
     required this.amount,
     required this.start,
     required this.end,
-    this.items = const [],
+    List<BudgetItem>? items,
     Map<String, Map<String, bool>>? checklist,
-  }) : checklist = checklist ?? {};
+  }) : items = List<BudgetItem>.from(items ?? <BudgetItem>[]),
+       checklist = checklist ?? {};
 
   /// Returns list of month keys between start and end inclusive, formatted as YYYY-MM
   List<String> monthKeys() {
     final months = <String>[];
     final fmt = DateFormat('yyyy-MM');
-    DateTime d = DateTime(start.year, start.month);
-    final endMonth = DateTime(end.year, end.month);
+    // Normalize to the first day of the month to avoid timezone/day differences
+    DateTime d = DateTime(start.year, start.month, 1);
+    DateTime endMonth = DateTime(end.year, end.month, 1);
+
+    // If both dates are in the same calendar month, return that single month
+    if (start.year == end.year && start.month == end.month) {
+      return [fmt.format(DateTime(start.year, start.month, 1))];
+    }
+
+    // If end is before start, swap to avoid an empty or reversed range
+    if (endMonth.isBefore(d)) {
+      final tmp = d;
+      d = endMonth;
+      endMonth = tmp;
+    }
     while (!d.isAfter(endMonth)) {
       months.add(fmt.format(d));
-      d = DateTime(d.year, d.month + 1);
+      // advance to the first day of next month
+      d = DateTime(d.year, d.month + 1, 1);
     }
     return months;
   }
@@ -92,7 +107,7 @@ class Budget {
           (json['items'] as List<dynamic>?)
               ?.map((e) => BudgetItem.fromJson(e as Map<String, dynamic>))
               .toList() ??
-          [],
+          <BudgetItem>[],
       checklist: (json['checklist'] as Map<String, dynamic>?)?.map(
         (k, v) => MapEntry(k, Map<String, bool>.from(v as Map)),
       ),
