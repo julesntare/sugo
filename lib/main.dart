@@ -1,8 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
 import 'widgets/app_theme.dart';
 import 'screens/home_screen.dart';
+import 'models/budget_adapter.dart';
+import 'models/budget_item_adapter.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+  // register adapters
+  if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(BudgetItemAdapter());
+  if (!Hive.isAdapterRegistered(2)) Hive.registerAdapter(BudgetAdapter());
+  // open budgets box
+  await Hive.openBox('budgets');
+
   runApp(const SugoApp());
 }
 
