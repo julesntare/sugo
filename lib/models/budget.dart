@@ -1,0 +1,101 @@
+import 'package:intl/intl.dart';
+import 'budget_item.dart';
+
+class Budget {
+  final String id;
+  final String title;
+  final double amount;
+  final DateTime start;
+  final DateTime end;
+  final List<BudgetItem> items;
+
+  /// per-month checklist state: key YYYY-MM -> itemId -> checked
+  final Map<String, Map<String, bool>> checklist;
+
+  Budget({
+    required this.id,
+    required this.title,
+    required this.amount,
+    required this.start,
+    required this.end,
+    this.items = const [],
+    Map<String, Map<String, bool>>? checklist,
+  }) : checklist = checklist ?? {};
+
+  /// Returns list of month keys between start and end inclusive, formatted as YYYY-MM
+  List<String> monthKeys() {
+    final months = <String>[];
+    final fmt = DateFormat('yyyy-MM');
+    DateTime d = DateTime(start.year, start.month);
+    final endMonth = DateTime(end.year, end.month);
+    while (!d.isAfter(endMonth)) {
+      months.add(fmt.format(d));
+      d = DateTime(d.year, d.month + 1);
+    }
+    return months;
+  }
+
+  /// Compute expected deductions for a given month key (YYYY-MM)
+  double deductionsForMonth(String monthKey) {
+    double total = 0.0;
+    for (final it in items) {
+      if (it.monthlyAmount != null) total += it.monthlyAmount!;
+      if (it.oneTimeAmount != null && it.oneTimeMonth == monthKey)
+        total += it.oneTimeAmount!;
+    }
+    // subtract checked items in checklist for that month
+    final monthChecks = checklist[monthKey];
+    if (monthChecks != null) {
+      for (final it in items) {
+        if (monthChecks[it.id] == true) {
+          // If item has monthlyAmount, reduce monthlyAmount; else reduce oneTimeAmount if month matches
+          if (it.monthlyAmount != null)
+            total -= it.monthlyAmount!;
+          else if (it.oneTimeAmount != null && it.oneTimeMonth == monthKey)
+            total -= it.oneTimeAmount!;
+        }
+      }
+    }
+    return total;
+  }
+
+  /// Remaining forecast after applying deductions up to and including monthKey
+  double remainingUpTo(String monthKey) {
+    final keys = monthKeys();
+    double remaining = amount;
+    for (final k in keys) {
+      final ded = deductionsForMonth(k);
+      remaining -= ded;
+      if (k == monthKey) break;
+    }
+    return remaining;
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'amount': amount,
+    'start': start.toIso8601String(),
+    'end': end.toIso8601String(),
+    'items': items.map((e) => e.toJson()).toList(),
+    'checklist': checklist,
+  };
+
+  factory Budget.fromJson(Map<String, dynamic> json) {
+    return Budget(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      amount: (json['amount'] as num).toDouble(),
+      start: DateTime.parse(json['start'] as String),
+      end: DateTime.parse(json['end'] as String),
+      items:
+          (json['items'] as List<dynamic>?)
+              ?.map((e) => BudgetItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      checklist: (json['checklist'] as Map<String, dynamic>?)?.map(
+        (k, v) => MapEntry(k, Map<String, bool>.from(v as Map)),
+      ),
+    );
+  }
+}

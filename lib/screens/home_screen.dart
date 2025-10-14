@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/app_theme.dart';
 import 'forecast_screen.dart';
+import 'budgets_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -43,6 +44,14 @@ class HomeScreen extends StatelessWidget {
               },
               icon: const Icon(Icons.show_chart),
               label: const Text('Create forecast'),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const BudgetsScreen())),
+              icon: const Icon(Icons.account_balance_wallet),
+              label: const Text('Budgets'),
             ),
             const SizedBox(height: 16),
             const Expanded(

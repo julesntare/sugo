@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'app_theme.dart';
 
 class ForecastCard extends StatelessWidget {
@@ -15,6 +16,7 @@ class ForecastCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final formatter = NumberFormat.currency(symbol: 'Rwf ', decimalDigits: 0);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
@@ -22,7 +24,7 @@ class ForecastCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -46,7 +48,7 @@ class ForecastCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Months: $months • Goal: \$${goal.toString()}',
+                    'Months: $months • Goal: Rwf ${formatter.format(goal)}',
                     style: const TextStyle(color: Colors.white70),
                   ),
                 ],
@@ -55,7 +57,7 @@ class ForecastCard extends StatelessWidget {
             ElevatedButton(
               onPressed: () {},
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.12),
+                backgroundColor: Colors.white.withValues(alpha: 0.12),
                 elevation: 0,
               ),
               child: const Text('Open', style: TextStyle(color: Colors.white)),
