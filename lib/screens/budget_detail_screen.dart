@@ -37,71 +37,91 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, dialogSetState) => AlertDialog(
+          backgroundColor: AppColors.slate,
           title: const Text('Add item'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Name'),
-              ),
-              TextField(
-                controller: amountCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  suffixText: 'Rwf',
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    prefixIcon: Icon(Icons.label, color: AppColors.lightGrey),
+                  ),
                 ),
-                keyboardType: TextInputType.number,
-                onChanged: (value) {
-                  if (value.isEmpty) return;
-                  // Remove non-digits
-                  value = value.replaceAll(RegExp(r'[^\d]'), '');
-                  if (value.isEmpty) return;
-                  // Parse and format
-                  final number = int.tryParse(value) ?? 0;
-                  final formatted = numberFormat.format(number);
-                  amountCtrl.value = TextEditingValue(
-                    text: formatted,
-                    selection: TextSelection.collapsed(
-                      offset: formatted.length,
+                const SizedBox(height: 10),
+                TextField(
+                  controller: amountCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Amount',
+                    suffixText: 'Rwf',
+                    prefixIcon: Icon(
+                      Icons.payments,
+                      color: AppColors.lightGrey,
                     ),
-                  );
-                },
-              ),
-              DropdownButton<String>(
-                value: mode,
-                items: const [
-                  DropdownMenuItem(value: 'once', child: Text('Once')),
-                  DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
-                  DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
-                ],
-                onChanged: (v) {
-                  dialogSetState(() {
-                    mode = v ?? 'once';
-                    startDate ??= DateTime.now();
-                  });
-                },
-              ),
-              TextButton(
-                onPressed: () async {
-                  final now = DateTime.now();
-                  final d = await showDatePicker(
-                    context: context,
-                    initialDate: startDate ?? now,
-                    firstDate: now.subtract(const Duration(days: 3650)),
-                    lastDate: now.add(const Duration(days: 3650)),
-                  );
-                  if (d != null) {
-                    dialogSetState(() => startDate = d);
-                  }
-                },
-                child: Text(
-                  startDate == null
-                      ? 'Pick date'
-                      : 'Start: ${DateFormat('yyyy-MM-dd').format(startDate!)}',
+                  ),
+                  keyboardType: TextInputType.number,
+                  onChanged: (value) {
+                    if (value.isEmpty) return;
+                    value = value.replaceAll(RegExp(r'[^\d]'), '');
+                    if (value.isEmpty) return;
+                    final number = int.tryParse(value) ?? 0;
+                    final formatted = numberFormat.format(number);
+                    amountCtrl.value = TextEditingValue(
+                      text: formatted,
+                      selection: TextSelection.collapsed(
+                        offset: formatted.length,
+                      ),
+                    );
+                  },
                 ),
-              ),
-            ],
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: mode,
+                  decoration: const InputDecoration(labelText: 'Frequency'),
+                  items: const [
+                    DropdownMenuItem(value: 'once', child: Text('Once')),
+                    DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
+                    DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                  ],
+                  onChanged: (v) {
+                    dialogSetState(() {
+                      mode = v ?? 'once';
+                      startDate ??= DateTime.now();
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final now = DateTime.now();
+                    final d = await showDatePicker(
+                      context: context,
+                      initialDate: startDate ?? now,
+                      firstDate: now.subtract(const Duration(days: 3650)),
+                      lastDate: now.add(const Duration(days: 3650)),
+                    );
+                    if (d != null) {
+                      dialogSetState(() => startDate = d);
+                    }
+                  },
+                  icon: const Icon(
+                    Icons.calendar_today,
+                    color: AppColors.lightGrey,
+                  ),
+                  label: Text(
+                    startDate == null
+                        ? 'Pick date'
+                        : 'Start: ${DateFormat('yyyy-MM-dd').format(startDate!)}',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide.none,
+                    backgroundColor: AppColors.slateTint8,
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -117,7 +137,6 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     ) ??
                     0;
                 if (name.isEmpty || amount <= 0) return;
-                // ensure startDate is set for items that require it
                 if ((mode == 'once' || mode == 'weekly' || mode == 'monthly') &&
                     startDate == null) {
                   startDate = DateTime.now();

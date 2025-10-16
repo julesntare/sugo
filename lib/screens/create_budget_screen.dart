@@ -81,34 +81,50 @@ class _CreateBudgetScreenState extends State<CreateBudgetScreen> {
       appBar: AppBar(
         title: Text(widget.budget == null ? 'Create Budget' : 'Edit Budget'),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Card(
+          elevation: 6,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           color: AppColors.cardGrey,
           child: Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 18.0,
+              vertical: 16.0,
+            ),
             child: Form(
               key: _formKey,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   TextFormField(
                     controller: _titleCtrl,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                    decoration: InputDecoration(
                       labelText: 'Title',
-                      labelStyle: TextStyle(color: Colors.white),
+                      hintText: 'e.g., Monthly budget',
+                      prefixIcon: const Icon(
+                        Icons.title,
+                        color: AppColors.lightGrey,
+                      ),
                     ),
                     validator: (v) =>
                         (v == null || v.isEmpty) ? 'Enter title' : null,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   TextFormField(
                     controller: _amountCtrl,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                    decoration: InputDecoration(
                       labelText: 'Amount',
-                      labelStyle: TextStyle(color: Colors.white),
+                      hintText: 'Total amount for the budget',
+                      prefixIcon: const Icon(
+                        Icons.payments,
+                        color: AppColors.lightGrey,
+                      ),
                       suffixText: 'Rwf',
                     ),
                     keyboardType: TextInputType.number,
@@ -133,62 +149,76 @@ class _CreateBudgetScreenState extends State<CreateBudgetScreen> {
                           : null;
                     },
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          _start == null
-                              ? 'Start date'
-                              : 'Start: ${_start!.toLocal().toString().split(' ')[0]}',
-                          style: TextStyle(color: AppColors.lightGrey),
+                        child: OutlinedButton.icon(
+                          onPressed: _pickStart,
+                          icon: const Icon(
+                            Icons.calendar_today,
+                            color: AppColors.lightGrey,
+                          ),
+                          label: Text(
+                            _start == null
+                                ? 'Start date'
+                                : 'Start: ${_start!.toLocal().toString().split(' ')[0]}',
+                            style: const TextStyle(color: AppColors.lightGrey),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide.none,
+                            backgroundColor: AppColors.slateTint12,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
                         ),
                       ),
-                      TextButton(
-                        onPressed: _pickStart,
-                        child: Text(
-                          'Pick',
-                          style: TextStyle(
-                            color: AppTheme.light().colorScheme.primary,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _pickEnd,
+                          icon: const Icon(
+                            Icons.calendar_month,
+                            color: AppColors.lightGrey,
+                          ),
+                          label: Text(
+                            _end == null
+                                ? 'End date'
+                                : 'End: ${_end!.toLocal().toString().split(' ')[0]}',
+                            style: const TextStyle(color: AppColors.lightGrey),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide.none,
+                            backgroundColor: AppColors.slateTint12,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _end == null
-                              ? 'End date'
-                              : 'End: ${_end!.toLocal().toString().split(' ')[0]}',
-                          style: TextStyle(color: AppColors.lightGrey),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _pickEnd,
-                        child: Text(
-                          'Pick',
-                          style: TextStyle(
-                            color: AppTheme.light().colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _submit,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        backgroundColor: AppTheme.light().colorScheme.primary,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: AppTheme.mainGradient(),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Text(widget.budget == null ? 'Create' : 'Save'),
+                      child: ElevatedButton(
+                        onPressed: _submit,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                        ),
+                        child: Text(widget.budget == null ? 'Create' : 'Save'),
+                      ),
                     ),
                   ),
                 ],
