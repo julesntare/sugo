@@ -8,9 +8,12 @@ class Budget {
   final DateTime start;
   final DateTime end;
   List<BudgetItem> items; // Changed to non-final for SQLite loading
-
   /// per-month checklist state: key YYYY-MM -> itemId -> checked
   final Map<String, Map<String, bool>> checklist;
+
+  /// Optional per-month explicit salary date overrides: key YYYY-MM -> ISO date (yyyy-MM-dd)
+  /// If present, this exact date is used as the salary/payment date for that month.
+  final Map<String, String> monthSalaryOverrides;
 
   Budget({
     required this.id,
@@ -20,8 +23,10 @@ class Budget {
     required this.end,
     List<BudgetItem>? items,
     Map<String, Map<String, bool>>? checklist,
+    Map<String, String>? monthSalaryOverrides,
   }) : items = List<BudgetItem>.from(items ?? <BudgetItem>[]),
-       checklist = checklist ?? {};
+       checklist = checklist ?? {},
+       monthSalaryOverrides = monthSalaryOverrides ?? {};
 
   // Convert Budget to Map for SQLite
   Map<String, dynamic> toMap() {
@@ -44,6 +49,7 @@ class Budget {
       end: DateTime.parse(map['end']),
       items: [], // Items will be loaded separately
       checklist: {}, // Checklist will be loaded from shared preferences
+      monthSalaryOverrides: {},
     );
   }
 
@@ -166,6 +172,107 @@ class Budget {
         return 0.0;
       }
       return 0.0;
+    }
+  }
+
+  /// Compute the salary/payment date for a given monthKey (YYYY-MM).
+  /// Behaviour:
+  /// - If an explicit override exists in `monthSalaryOverrides`, use that date.
+  /// - Otherwise use the budget-level cutoff day (default 25) and adjust: if the day falls on
+  ///   Saturday or Sunday, move it back to the previous Friday.
+  /// - If the requested day is greater than the number of days in the month, it's clamped to the
+  ///   month's last day and then adjusted for weekend accordingly.
+  DateTime salaryDateForMonth(String monthKey, {int cutoffDay = 25}) {
+    try {
+      // If override exists, prefer full date override
+      final override = monthSalaryOverrides[monthKey];
+      if (override != null) return DateTime.parse(override);
+
+      final parts = monthKey.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+
+      // clamp cutoff to last day of month
+      final firstOfNext = DateTime(year, month + 1, 1);
+      final lastDay = firstOfNext.subtract(const Duration(days: 1)).day;
+      final day = cutoffDay.clamp(1, lastDay);
+      DateTime dt = DateTime(year, month, day);
+
+      // If falls on weekend, move back to Friday
+      if (dt.weekday == DateTime.saturday) {
+        dt = dt.subtract(const Duration(days: 1));
+      }
+      if (dt.weekday == DateTime.sunday) {
+        dt = dt.subtract(const Duration(days: 2));
+      }
+      return dt;
+    } catch (_) {
+      // fallback to first of month
+      final parts = monthKey.split('-');
+      final year = int.tryParse(parts[0]) ?? 1970;
+      final month = int.tryParse(parts[1]) ?? 1;
+      return DateTime(year, month, 1);
+    }
+  }
+
+  /// Return a human-friendly label for the range between previous month's salary date and this
+  /// month's salary date. Example: "24 Oct - 24 Nov".
+  String monthRangeLabel(String monthKey, {int cutoffDay = 25}) {
+    try {
+      final parts = monthKey.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+
+      // Determine start: normally the salary date for this month, but if this is the
+      // first budget month and the budget start is after that salary date, use the budget start.
+      final keys = monthKeys();
+      final thisMonthSalary = salaryDateForMonth(
+        monthKey,
+        cutoffDay: cutoffDay,
+      );
+      DateTime startDate = thisMonthSalary;
+      if (keys.isNotEmpty &&
+          monthKey == keys.first &&
+          start.isAfter(thisMonthSalary)) {
+        startDate = start;
+      }
+
+      // Determine end as one day before the salary date for the next month
+      final nextDate = DateTime(year, month + 1, 1);
+      final nextKey =
+          '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+      DateTime endDate;
+
+      // If this is the last month of the budget, end at budget.end
+      final isLast = keys.isNotEmpty && monthKey == keys.last;
+      if (isLast) {
+        endDate = this.end;
+      } else {
+        final nextSalary = salaryDateForMonth(nextKey, cutoffDay: cutoffDay);
+        endDate = nextSalary.subtract(const Duration(days: 1));
+      }
+
+      final startDay = _ordinal(startDate.day);
+      final endDay = _ordinal(endDate.day);
+      final startMon = DateFormat('MMM').format(startDate);
+      final endMon = DateFormat('MMM').format(endDate);
+      return '$startDay $startMon - $endDay $endMon';
+    } catch (_) {
+      return monthKey;
+    }
+  }
+
+  String _ordinal(int n) {
+    if (n >= 11 && n <= 13) return '${n}th';
+    switch (n % 10) {
+      case 1:
+        return '${n}st';
+      case 2:
+        return '${n}nd';
+      case 3:
+        return '${n}rd';
+      default:
+        return '${n}th';
     }
   }
 

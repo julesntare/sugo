@@ -5,8 +5,9 @@ import '../models/budget_item.dart';
 Future<void> showEditItemDialog(
   BuildContext context,
   BudgetItem item,
-  Function(BudgetItem) onSave,
-) async {
+  Function(BudgetItem) onSave, {
+  DateTime? preferredDate,
+}) async {
   final nameCtrl = TextEditingController(text: item.name);
   final amountCtrl = TextEditingController(
     text: NumberFormat('#,###').format(item.amount ?? 0),
@@ -71,9 +72,11 @@ Future<void> showEditItemDialog(
               TextButton(
                 onPressed: () async {
                   final now = DateTime.now();
+                  // Prefer a supplied preferredDate (e.g., the month range end) when opening the picker
+                  final initial = preferredDate ?? startDate ?? now;
                   final d = await showDatePicker(
                     context: context,
-                    initialDate: startDate ?? now,
+                    initialDate: initial,
                     firstDate: now.subtract(const Duration(days: 3650)),
                     lastDate: now.add(const Duration(days: 3650)),
                   );

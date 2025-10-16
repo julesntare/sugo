@@ -166,7 +166,42 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final months = _budget.monthKeys();
+    final allMonths = _budget.monthKeys();
+    // Filter out months where the computed start and end dates are identical
+    final months = allMonths.where((monthKey) {
+      try {
+        final parts = monthKey.split('-');
+        final year = int.parse(parts[0]);
+        final month = int.parse(parts[1]);
+
+        // start date: salary date for this month, unless first month and budget.start is after it
+        final thisMonthSalary = _budget.salaryDateForMonth(monthKey);
+        DateTime startDate = thisMonthSalary;
+        if (allMonths.isNotEmpty &&
+            monthKey == allMonths.first &&
+            _budget.start.isAfter(thisMonthSalary)) {
+          startDate = _budget.start;
+        }
+
+        // end date: either budget.end for last month, or day before next month's salary
+        final nextDate = DateTime(year, month + 1, 1);
+        final nextKey =
+            '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+        final isLast = allMonths.isNotEmpty && monthKey == allMonths.last;
+        DateTime endDate = isLast
+            ? _budget.end
+            : _budget
+                  .salaryDateForMonth(nextKey)
+                  .subtract(const Duration(days: 1));
+
+        // If start and end are the same day, filter this month out
+        return !(startDate.year == endDate.year &&
+            startDate.month == endDate.month &&
+            startDate.day == endDate.day);
+      } catch (_) {
+        return true;
+      }
+    }).toList();
     final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
 
     return Scaffold(
@@ -263,6 +298,18 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                               IconButton(
                                 icon: const Icon(Icons.edit),
                                 onPressed: () async {
+                                  // For the header list edit, prefer the item's existing startDate
+                                  DateTime? preferredDate;
+                                  if (it.startDate != null) {
+                                    try {
+                                      preferredDate = DateTime.parse(
+                                        it.startDate!,
+                                      );
+                                    } catch (_) {
+                                      preferredDate = null;
+                                    }
+                                  }
+
                                   await showEditItemDialog(context, it, (
                                     updatedItem,
                                   ) {
@@ -276,7 +323,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                                     });
                                     Storage.updateBudgetItem(updatedItem);
                                     widget.onChanged?.call(_budget);
-                                  });
+                                  }, preferredDate: preferredDate);
                                 },
                               ),
                               const Icon(Icons.chevron_right),
@@ -306,9 +353,12 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
           final key = months[idx];
           final deductions = _budget.deductionsForMonth(key);
           final remaining = _budget.remainingUpTo(key);
+          final monthLabel = _budget.monthRangeLabel(
+            key,
+          ); // e.g. "24 Oct - 24 Nov"
           // render month card with checklist
           // Determine which items apply to this month depending on frequency and startDate
-          bool _itemAppliesInMonth(BudgetItem it, String monthKey) {
+          bool itemAppliesInMonth(BudgetItem it, String monthKey) {
             try {
               final parts = monthKey.split('-');
               final firstDay = DateTime(
@@ -348,7 +398,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
           }
 
           final monthItems = _budget.items
-              .where((it) => _itemAppliesInMonth(it, key))
+              .where((it) => itemAppliesInMonth(it, key))
               .toList();
           final monthChecks = _budget.checklist[key] ?? {};
           return Card(
@@ -370,7 +420,41 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Text(key, style: Theme.of(context).textTheme.titleLarge),
+                      Expanded(
+                        child: Text(
+                          monthLabel,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Edit salary date for this month',
+                        icon: const Icon(Icons.edit, color: Colors.white),
+                        onPressed: () async {
+                          // allow user to pick a specific salary date for this month
+                          final current =
+                              _budget.monthSalaryOverrides[key] != null
+                              ? DateTime.parse(
+                                  _budget.monthSalaryOverrides[key]!,
+                                )
+                              : _budget.salaryDateForMonth(key);
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: current,
+                            firstDate: DateTime(_budget.start.year - 1),
+                            lastDate: DateTime(_budget.end.year + 1),
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              _budget.monthSalaryOverrides[key] = DateFormat(
+                                'yyyy-MM-dd',
+                              ).format(picked);
+                            });
+                            // persist override
+                            await Storage.updateBudget(_budget);
+                            widget.onChanged?.call(_budget);
+                          }
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 6),

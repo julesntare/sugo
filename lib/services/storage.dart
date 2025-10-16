@@ -6,6 +6,7 @@ import 'database_helper.dart';
 
 class Storage {
   static const _checklistKey = 'sugo_checklists_v1';
+  static const _salaryOverridesKey = 'sugo_salary_overrides_v1';
   static final _db = DatabaseHelper.instance;
 
   /// Save a budget and its items
@@ -32,6 +33,8 @@ class Storage {
     if (budget != null) {
       // Load checklist state from SharedPreferences
       budget.checklist.addAll(await _loadChecklist(id));
+      // Load month salary overrides
+      budget.monthSalaryOverrides.addAll(await _loadSalaryOverrides(id));
     }
     return budget;
   }
@@ -42,6 +45,7 @@ class Storage {
     // Load checklist states for all budgets
     for (var budget in budgets) {
       budget.checklist.addAll(await _loadChecklist(budget.id));
+      budget.monthSalaryOverrides.addAll(await _loadSalaryOverrides(budget.id));
     }
     return budgets;
   }
@@ -78,6 +82,7 @@ class Storage {
 
     // Update checklist state
     await _saveChecklist(budget.id, budget.checklist);
+    await _saveSalaryOverrides(budget.id, budget.monthSalaryOverrides);
   }
 
   /// Add a new item to a budget
@@ -104,6 +109,17 @@ class Storage {
     await prefs.setString('${_checklistKey}_$budgetId', jsonEncode(checklist));
   }
 
+  static Future<void> _saveSalaryOverrides(
+    String budgetId,
+    Map<String, String> overrides,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      '${_salaryOverridesKey}_$budgetId',
+      jsonEncode(overrides),
+    );
+  }
+
   static Future<Map<String, Map<String, bool>>> _loadChecklist(
     String budgetId,
   ) async {
@@ -124,8 +140,23 @@ class Storage {
     }
   }
 
+  static Future<Map<String, String>> _loadSalaryOverrides(
+    String budgetId,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('${_salaryOverridesKey}_$budgetId');
+    if (raw == null) return {};
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return map.map((k, v) => MapEntry(k, v as String));
+    } catch (_) {
+      return {};
+    }
+  }
+
   static Future<void> _deleteChecklist(String budgetId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('${_checklistKey}_$budgetId');
+    await prefs.remove('${_salaryOverridesKey}_$budgetId');
   }
 }
