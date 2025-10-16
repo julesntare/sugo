@@ -35,6 +35,12 @@ class Storage {
       budget.checklist.addAll(await _loadChecklist(id));
       // Load month salary overrides
       budget.monthSalaryOverrides.addAll(await _loadSalaryOverrides(id));
+      // Load per-month per-item overrides (dates)
+      budget.monthItemOverrides.addAll(await _loadItemOverrides(id));
+      // Load per-month per-item amount overrides
+      budget.monthItemAmountOverrides.addAll(
+        await _loadItemAmountOverrides(id),
+      );
     }
     return budget;
   }
@@ -46,6 +52,10 @@ class Storage {
     for (var budget in budgets) {
       budget.checklist.addAll(await _loadChecklist(budget.id));
       budget.monthSalaryOverrides.addAll(await _loadSalaryOverrides(budget.id));
+      budget.monthItemOverrides.addAll(await _loadItemOverrides(budget.id));
+      budget.monthItemAmountOverrides.addAll(
+        await _loadItemAmountOverrides(budget.id),
+      );
     }
     return budgets;
   }
@@ -83,6 +93,8 @@ class Storage {
     // Update checklist state
     await _saveChecklist(budget.id, budget.checklist);
     await _saveSalaryOverrides(budget.id, budget.monthSalaryOverrides);
+    await _saveItemOverrides(budget.id, budget.monthItemOverrides);
+    await _saveItemAmountOverrides(budget.id, budget.monthItemAmountOverrides);
   }
 
   /// Add a new item to a budget
@@ -154,9 +166,77 @@ class Storage {
     }
   }
 
+  static Future<void> _saveItemOverrides(
+    String budgetId,
+    Map<String, Map<String, String>> overrides,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      '${_salaryOverridesKey}_items_$budgetId',
+      jsonEncode(overrides),
+    );
+  }
+
+  static Future<Map<String, Map<String, String>>> _loadItemOverrides(
+    String budgetId,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('${_salaryOverridesKey}_items_$budgetId');
+    if (raw == null) return {};
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return map.map(
+        (k, v) => MapEntry(
+          k,
+          (v as Map<String, dynamic>).map(
+            (ik, iv) => MapEntry(ik, iv as String),
+          ),
+        ),
+      );
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<void> _saveItemAmountOverrides(
+    String budgetId,
+    Map<String, Map<String, double>> overrides,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      '${_salaryOverridesKey}_item_amounts_$budgetId',
+      jsonEncode(overrides),
+    );
+  }
+
+  static Future<Map<String, Map<String, double>>> _loadItemAmountOverrides(
+    String budgetId,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(
+      '${_salaryOverridesKey}_item_amounts_$budgetId',
+    );
+    if (raw == null) return {};
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return map.map(
+        (k, v) => MapEntry(
+          k,
+          (v as Map<String, dynamic>).map(
+            (ik, iv) => MapEntry(ik, (iv as num).toDouble()),
+          ),
+        ),
+      );
+    } catch (_) {
+      return {};
+    }
+  }
+
   static Future<void> _deleteChecklist(String budgetId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('${_checklistKey}_$budgetId');
     await prefs.remove('${_salaryOverridesKey}_$budgetId');
+    await prefs.remove('${_salaryOverridesKey}_items_$budgetId');
+    await prefs.remove('${_salaryOverridesKey}_item_amounts_$budgetId');
   }
 }

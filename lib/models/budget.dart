@@ -15,6 +15,12 @@ class Budget {
   /// If present, this exact date is used as the salary/payment date for that month.
   final Map<String, String> monthSalaryOverrides;
 
+  /// Optional per-month per-item date overrides: key YYYY-MM -> itemId -> ISO date (yyyy-MM-dd)
+  final Map<String, Map<String, String>> monthItemOverrides;
+
+  /// Optional per-month per-item amount overrides: key YYYY-MM -> itemId -> amount
+  final Map<String, Map<String, double>> monthItemAmountOverrides;
+
   Budget({
     required this.id,
     required this.title,
@@ -24,9 +30,13 @@ class Budget {
     List<BudgetItem>? items,
     Map<String, Map<String, bool>>? checklist,
     Map<String, String>? monthSalaryOverrides,
+    Map<String, Map<String, String>>? monthItemOverridesParam,
+    Map<String, Map<String, double>>? monthItemAmountOverridesParam,
   }) : items = List<BudgetItem>.from(items ?? <BudgetItem>[]),
        checklist = checklist ?? {},
-       monthSalaryOverrides = monthSalaryOverrides ?? {};
+       monthSalaryOverrides = monthSalaryOverrides ?? {},
+       monthItemOverrides = monthItemOverridesParam ?? {},
+       monthItemAmountOverrides = monthItemAmountOverridesParam ?? {};
 
   // Convert Budget to Map for SQLite
   Map<String, dynamic> toMap() {
@@ -50,6 +60,8 @@ class Budget {
       items: [], // Items will be loaded separately
       checklist: {}, // Checklist will be loaded from shared preferences
       monthSalaryOverrides: {},
+      monthItemOverridesParam: {},
+      monthItemAmountOverridesParam: {},
     );
   }
 
@@ -111,9 +123,32 @@ class Budget {
   }
 
   double _deductionForItemInMonth(BudgetItem it, String monthKey) {
-    final amt = it.amount ?? 0.0;
+    // Amount to use for this month: per-month override (if any) falls back to item.amount
+    final amt = monthItemAmountOverrides[monthKey]?[it.id] ?? it.amount ?? 0.0;
+    // Date override (if any) for this item in this month
+    final overrideForThisMonth = monthItemOverrides[monthKey]?[it.id];
     if (it.frequency == 'monthly') {
-      // Applies once per month starting from startDate (if provided)
+      // If an override date exists for this month, use it to determine applicability
+      if (overrideForThisMonth != null) {
+        try {
+          final sd = DateTime.parse(overrideForThisMonth);
+          final keyDate = DateTime(
+            int.parse(monthKey.split('-')[0]),
+            int.parse(monthKey.split('-')[1]),
+            1,
+          );
+          final lastDay = DateTime(
+            keyDate.year,
+            keyDate.month + 1,
+            1,
+          ).subtract(const Duration(days: 1));
+          if (!sd.isAfter(lastDay)) return amt;
+        } catch (_) {
+          return amt;
+        }
+        return 0.0;
+      }
+      // Otherwise fall back to item's startDate logic
       if (it.startDate == null) return amt;
       try {
         final sd = DateTime.parse(it.startDate!);
@@ -134,9 +169,11 @@ class Budget {
       return 0.0;
     } else if (it.frequency == 'weekly') {
       // Count number of weekly occurrences within the month for the recurring weekly amount
-      if (it.startDate == null) return 0.0;
+      // allow override to act as the effective start date for this month
+      final weeklySdStr = overrideForThisMonth ?? it.startDate;
+      if (weeklySdStr == null) return 0.0;
       try {
-        final sd = DateTime.parse(it.startDate!);
+        final sd = DateTime.parse(weeklySdStr);
         final parts = monthKey.split('-');
         final firstDay = DateTime(int.parse(parts[0]), int.parse(parts[1]), 1);
         final lastDay = DateTime(
@@ -161,9 +198,11 @@ class Budget {
       }
     } else {
       // once
-      if (it.startDate == null) return 0.0;
+      // If an override exists for this month, treat that as the one-time date
+      final onceSdStr = overrideForThisMonth ?? it.startDate;
+      if (onceSdStr == null) return 0.0;
       try {
-        final sd = DateTime.parse(it.startDate!);
+        final sd = DateTime.parse(onceSdStr);
         final parts = monthKey.split('-');
         if (sd.year == int.parse(parts[0]) && sd.month == int.parse(parts[1])) {
           return amt;
@@ -246,7 +285,7 @@ class Budget {
       // If this is the last month of the budget, end at budget.end
       final isLast = keys.isNotEmpty && monthKey == keys.last;
       if (isLast) {
-        endDate = this.end;
+        endDate = end;
       } else {
         final nextSalary = salaryDateForMonth(nextKey, cutoffDay: cutoffDay);
         endDate = nextSalary.subtract(const Duration(days: 1));
@@ -296,6 +335,9 @@ class Budget {
     'end': end.toIso8601String(),
     'items': items.map((e) => e.toJson()).toList(),
     'checklist': checklist,
+    'monthSalaryOverrides': monthSalaryOverrides,
+    'monthItemOverrides': monthItemOverrides,
+    'monthItemAmountOverrides': monthItemAmountOverrides,
   };
 
   factory Budget.fromJson(Map<String, dynamic> json) {
@@ -313,6 +355,28 @@ class Budget {
       checklist: (json['checklist'] as Map<String, dynamic>?)?.map(
         (k, v) => MapEntry(k, Map<String, bool>.from(v as Map)),
       ),
+      monthSalaryOverrides:
+          (json['monthSalaryOverrides'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, v as String),
+          ),
+      monthItemOverridesParam:
+          (json['monthItemOverrides'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(
+              k,
+              (v as Map<String, dynamic>).map(
+                (ik, iv) => MapEntry(ik, iv as String),
+              ),
+            ),
+          ),
+      monthItemAmountOverridesParam:
+          (json['monthItemAmountOverrides'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(
+              k,
+              (v as Map<String, dynamic>).map(
+                (ik, iv) => MapEntry(ik, (iv as num).toDouble()),
+              ),
+            ),
+          ),
     );
   }
 }
