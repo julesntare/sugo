@@ -346,6 +346,27 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     );
                   }),
                 const SizedBox(height: 12),
+                const Divider(color: Colors.white24),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Monthly ranges',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleMedium?.copyWith(color: Colors.white),
+                    ),
+                    // small hint to show separation
+                    Text(
+                      'Tap an item to view details',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.lightGrey,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
               ],
             );
           }
