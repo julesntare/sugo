@@ -76,18 +76,30 @@ class Budget {
 
   /// Compute expected deductions for a given month key (YYYY-MM)
   double deductionsForMonth(String monthKey) {
-    double total = 0.0;
-    for (final it in items) {
-      total += _deductionForItemInMonth(it, monthKey);
-    }
-    // subtract checked items in checklist for that month
+    // Determine which items actually apply to this month (deduction > 0)
+    final applicable = items
+        .where((it) => _deductionForItemInMonth(it, monthKey) > 0.0)
+        .toList();
+
+    // If there are no applicable items, nothing to deduct
+    if (applicable.isEmpty) return 0.0;
+
+    // If checklist for the month is missing or any applicable item is not checked,
+    // we consider the budget "yet to be checked" and do not reduce the budget.
     final monthChecks = checklist[monthKey];
-    if (monthChecks != null) {
-      for (final it in items) {
-        if (monthChecks[it.id] == true) {
-          total -= _deductionForItemInMonth(it, monthKey);
-        }
+    if (monthChecks == null) return 0.0;
+
+    for (final it in applicable) {
+      if (monthChecks[it.id] != true) {
+        // At least one applicable item is unchecked -> skip reductions
+        return 0.0;
       }
+    }
+
+    // All applicable items are checked: sum their deductions
+    double total = 0.0;
+    for (final it in applicable) {
+      total += _deductionForItemInMonth(it, monthKey);
     }
     return total;
   }
@@ -147,8 +159,9 @@ class Budget {
       try {
         final sd = DateTime.parse(it.startDate!);
         final parts = monthKey.split('-');
-        if (sd.year == int.parse(parts[0]) && sd.month == int.parse(parts[1]))
+        if (sd.year == int.parse(parts[0]) && sd.month == int.parse(parts[1])) {
           return amt;
+        }
       } catch (_) {
         return 0.0;
       }
