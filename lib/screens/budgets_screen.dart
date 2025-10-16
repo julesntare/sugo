@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/budget.dart';
+import '../widgets/app_theme.dart';
 import '../services/storage.dart';
 import 'create_budget_screen.dart';
 import 'budget_detail_screen.dart';
@@ -105,78 +106,122 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
                     setState(() => _budgets.removeAt(i));
                     await Storage.deleteBudget(b.id);
                   },
-                  child: ListTile(
-                    title: Text(b.title),
-                    subtitle: Text(
-                      'Amount: ${fmt.format(b.amount)} Rwf • Remaining: ${fmt.format(b.remainingUpTo(keyForRemaining))} Rwf',
-                    ),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => BudgetDetailScreen(
-                          budget: b,
-                          onChanged: (updated) async {
-                            // replace in list and persist
-                            setState(() {
-                              _budgets[i] = updated;
-                            });
-                            await Storage.saveBudgets(_budgets);
-                          },
+                  child: Card(
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => BudgetDetailScreen(
+                            budget: b,
+                            onChanged: (updated) async {
+                              // replace in list and persist
+                              setState(() {
+                                _budgets[i] = updated;
+                              });
+                              await Storage.saveBudgets(_budgets);
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                    trailing: PopupMenuButton(
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Text('Delete'),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 8,
                         ),
-                      ],
-                      onSelected: (value) async {
-                        if (value == 'edit') {
-                          final updated = await Navigator.of(context)
-                              .push<Budget>(
-                                MaterialPageRoute(
-                                  builder: (_) => CreateBudgetScreen(budget: b),
-                                ),
-                              );
-                          if (updated != null) {
-                            // Preserve existing items when updating budget
-                            updated.items = b.items;
-                            setState(() => _budgets[i] = updated);
-                            await Storage.updateBudget(updated);
-                          }
-                        } else if (value == 'delete') {
-                          final confirmed =
-                              await showDialog<bool>(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Delete Budget'),
-                                  content: Text(
-                                    'Are you sure you want to delete "${b.title}"?',
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.mainGradient(),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    b.title,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
                                   ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(false),
-                                      child: const Text('CANCEL'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(true),
-                                      child: const Text('DELETE'),
-                                    ),
-                                  ],
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Amount: ${fmt.format(b.amount)} Rwf • Remaining: ${fmt.format(b.remainingUpTo(keyForRemaining))} Rwf',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            PopupMenuButton(
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Edit'),
                                 ),
-                              ) ??
-                              false;
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Delete'),
+                                ),
+                              ],
+                              onSelected: (value) async {
+                                if (value == 'edit') {
+                                  final updated = await Navigator.of(context)
+                                      .push<Budget>(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              CreateBudgetScreen(budget: b),
+                                        ),
+                                      );
+                                  if (updated != null) {
+                                    // Preserve existing items when updating budget
+                                    updated.items = b.items;
+                                    setState(() => _budgets[i] = updated);
+                                    await Storage.updateBudget(updated);
+                                  }
+                                } else if (value == 'delete') {
+                                  final confirmed =
+                                      await showDialog<bool>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          title: const Text('Delete Budget'),
+                                          content: Text(
+                                            'Are you sure you want to delete "${b.title}"?',
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.of(
+                                                context,
+                                              ).pop(false),
+                                              child: const Text('CANCEL'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () => Navigator.of(
+                                                context,
+                                              ).pop(true),
+                                              child: const Text('DELETE'),
+                                            ),
+                                          ],
+                                        ),
+                                      ) ??
+                                      false;
 
-                          if (confirmed) {
-                            setState(() => _budgets.removeAt(i));
-                            await Storage.deleteBudget(b.id);
-                          }
-                        }
-                      },
+                                  if (confirmed) {
+                                    setState(() => _budgets.removeAt(i));
+                                    await Storage.deleteBudget(b.id);
+                                  }
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 );

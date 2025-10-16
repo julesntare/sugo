@@ -13,11 +13,15 @@ class SugoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppTheme.light();
     return MaterialApp(
       title: 'Sugo',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      home: const HomeScreen(),
+      theme: theme,
+      home: Container(
+        decoration: BoxDecoration(gradient: AppTheme.mainGradient()),
+        child: const HomeScreen(),
+      ),
     );
   }
 }

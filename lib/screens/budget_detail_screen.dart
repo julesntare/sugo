@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 
 import '../models/budget.dart';
 import '../models/budget_item.dart';
+import '../services/storage.dart';
+import '../widgets/app_theme.dart';
 import 'item_detail_screen.dart';
 import 'edit_item_dialog.dart';
 
@@ -167,11 +169,16 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
               children: [
                 Text(
                   'Budget items',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(color: Colors.white),
                 ),
                 const SizedBox(height: 8),
                 if (_budget.items.isEmpty)
-                  const Text('No items added yet')
+                  Text(
+                    'No items added yet',
+                    style: TextStyle(color: AppColors.lightGrey),
+                  )
                 else
                   ..._budget.items.map((it) {
                     final label = it.monthlyAmount != null
@@ -212,48 +219,60 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                             ) ??
                             false;
                       },
-                      onDismissed: (direction) {
+                      onDismissed: (direction) async {
                         setState(() {
                           _budget.items.removeWhere((item) => item.id == it.id);
                         });
+                        // persist deletion
+                        await Storage.deleteBudgetItem(it.id);
                         widget.onChanged?.call(_budget);
                       },
-                      child: ListTile(
-                        title: Text(it.name),
-                        subtitle: Text(label),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit),
-                              onPressed: () async {
-                                await showEditItemDialog(context, it, (
-                                  updatedItem,
-                                ) {
-                                  setState(() {
-                                    final index = _budget.items.indexWhere(
-                                      (item) => item.id == it.id,
-                                    );
-                                    if (index != -1) {
-                                      _budget.items[index] = updatedItem;
-                                    }
+                      child: Card(
+                        color: AppColors.cardGrey,
+                        child: ListTile(
+                          title: Text(
+                            it.name,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          subtitle: Text(
+                            label,
+                            style: TextStyle(color: AppColors.lightGrey),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit),
+                                onPressed: () async {
+                                  await showEditItemDialog(context, it, (
+                                    updatedItem,
+                                  ) {
+                                    setState(() {
+                                      final index = _budget.items.indexWhere(
+                                        (item) => item.id == it.id,
+                                      );
+                                      if (index != -1) {
+                                        _budget.items[index] = updatedItem;
+                                      }
+                                    });
+                                    Storage.updateBudgetItem(updatedItem);
+                                    widget.onChanged?.call(_budget);
                                   });
+                                },
+                              ),
+                              const Icon(Icons.chevron_right),
+                            ],
+                          ),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ItemDetailScreen(
+                                budget: _budget,
+                                item: it,
+                                onChanged: (updated) {
+                                  setState(() => _budget = updated);
                                   widget.onChanged?.call(_budget);
-                                });
-                              },
-                            ),
-                            const Icon(Icons.chevron_right),
-                          ],
-                        ),
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ItemDetailScreen(
-                              budget: _budget,
-                              item: it,
-                              onChanged: (updated) {
-                                setState(() => _budget = updated);
-                                widget.onChanged?.call(_budget);
-                              },
+                                },
+                              ),
                             ),
                           ),
                         ),
@@ -277,32 +296,55 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
           }).toList();
           final monthChecks = _budget.checklist[key] ?? {};
           return Card(
+            color: AppColors.cardGrey,
             margin: const EdgeInsets.symmetric(vertical: 8),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(key, style: Theme.of(context).textTheme.titleLarge),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          gradient: AppTheme.mainGradient(),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(key, style: Theme.of(context).textTheme.titleLarge),
+                    ],
+                  ),
                   const SizedBox(height: 6),
                   Text(
                     'Deductions: ${fmt.format(deductions)} Rwf • Remaining: ${fmt.format(remaining)} Rwf',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.lightGrey,
+                    ),
                   ),
                   const Divider(),
                   if (monthItems.isEmpty)
-                    const Text('No items')
+                    Text(
+                      'No items',
+                      style: TextStyle(color: AppColors.lightGrey),
+                    )
                   else
                     ...monthItems.map((it) {
                       final checked = monthChecks[it.id] == true;
                       return ListTile(
-                        title: Text(it.name),
+                        title: Text(
+                          it.name,
+                          style: const TextStyle(color: Colors.white),
+                        ),
                         subtitle: Text(
                           it.monthlyAmount != null
                               ? 'Monthly: ${fmt.format(it.monthlyAmount)} Rwf'
                               : (it.oneTimeAmount != null
                                     ? 'One-time: ${fmt.format(it.oneTimeAmount)} Rwf'
                                     : ''),
+                          style: TextStyle(color: AppColors.lightGrey),
                         ),
                         trailing: Checkbox(
                           value: checked,
