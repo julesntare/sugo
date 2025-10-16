@@ -2,36 +2,36 @@ class BudgetItem {
   final String id;
   final String name;
 
-  /// Amount that repeats each month (e.g., rent, subscription). Optional.
-  final double? monthlyAmount;
+  /// Frequency: 'once', 'weekly', 'monthly'
+  final String frequency;
 
-  /// One-time amount applied to a single month. Optional.
-  final double? oneTimeAmount;
+  /// Amount for repeating or one-time purchases. For 'once' this is oneTimeAmount; for monthly/weekly it's the recurring amount.
+  final double? amount;
 
-  /// Month key in format YYYY-MM when oneTimeAmount should be applied. Optional.
-  final String? oneTimeMonth;
+  /// ISO date string (yyyy-MM-dd) indicating when weekly/monthly frequency starts, or when a one-time purchase occurs.
+  final String? startDate;
 
   BudgetItem({
     required this.id,
     required this.name,
-    this.monthlyAmount,
-    this.oneTimeAmount,
-    this.oneTimeMonth,
+    this.frequency = 'once',
+    this.amount,
+    this.startDate,
   });
 
   BudgetItem copyWith({
     String? id,
     String? name,
-    double? monthlyAmount,
-    double? oneTimeAmount,
-    String? oneTimeMonth,
+    String? frequency,
+    double? amount,
+    String? startDate,
   }) {
     return BudgetItem(
       id: id ?? this.id,
       name: name ?? this.name,
-      monthlyAmount: monthlyAmount ?? this.monthlyAmount,
-      oneTimeAmount: oneTimeAmount ?? this.oneTimeAmount,
-      oneTimeMonth: oneTimeMonth ?? this.oneTimeMonth,
+      frequency: frequency ?? this.frequency,
+      amount: amount ?? this.amount,
+      startDate: startDate ?? this.startDate,
     );
   }
 
@@ -39,18 +39,18 @@ class BudgetItem {
   Map<String, dynamic> toMap() => {
     'id': id,
     'name': name,
-    'monthly_amount': monthlyAmount,
-    'one_time_amount': oneTimeAmount,
-    'one_time_month': oneTimeMonth,
+    'frequency': frequency,
+    'amount': amount,
+    'start_date': startDate,
   };
 
   // Create from SQLite row
   factory BudgetItem.fromMap(Map<String, dynamic> map) => BudgetItem(
     id: map['id'] as String,
     name: map['name'] as String,
-    monthlyAmount: (map['monthly_amount'] as num?)?.toDouble(),
-    oneTimeAmount: (map['one_time_amount'] as num?)?.toDouble(),
-    oneTimeMonth: map['one_time_month'] as String?,
+    frequency: map['frequency'] as String? ?? 'once',
+    amount: (map['amount'] as num?)?.toDouble(),
+    startDate: map['start_date'] as String?,
   );
 
   // For backwards compatibility and JSON serialization
@@ -59,8 +59,8 @@ class BudgetItem {
   factory BudgetItem.fromJson(Map<String, dynamic> json) => BudgetItem(
     id: json['id'] as String,
     name: json['name'] as String,
-    monthlyAmount: (json['monthlyAmount'] as num?)?.toDouble(),
-    oneTimeAmount: (json['oneTimeAmount'] as num?)?.toDouble(),
-    oneTimeMonth: json['oneTimeMonth'] as String?,
+    frequency: json['frequency'] as String? ?? 'once',
+    amount: (json['amount'] as num?)?.toDouble(),
+    startDate: json['startDate'] as String?,
   );
 }

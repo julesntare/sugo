@@ -19,7 +19,13 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    // bump database version to 2 to add frequency/start_date to budget_items
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _createDB,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -38,12 +44,29 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         budget_id TEXT NOT NULL,
         name TEXT NOT NULL,
-        monthly_amount REAL,
-        one_time_amount REAL,
-        one_time_month TEXT,
+        frequency TEXT DEFAULT 'once',
+        amount REAL,
+        start_date TEXT,
         FOREIGN KEY (budget_id) REFERENCES budgets (id) ON DELETE CASCADE
       )
     ''');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // add new columns to budget_items
+      try {
+        await db.execute(
+          "ALTER TABLE budget_items ADD COLUMN frequency TEXT DEFAULT 'once'",
+        );
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE budget_items ADD COLUMN amount REAL');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE budget_items ADD COLUMN start_date TEXT');
+      } catch (_) {}
+    }
   }
 
   // Budget operations

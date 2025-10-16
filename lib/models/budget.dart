@@ -78,26 +78,82 @@ class Budget {
   double deductionsForMonth(String monthKey) {
     double total = 0.0;
     for (final it in items) {
-      if (it.monthlyAmount != null) total += it.monthlyAmount!;
-      if (it.oneTimeAmount != null && it.oneTimeMonth == monthKey) {
-        total += it.oneTimeAmount!;
-      }
+      total += _deductionForItemInMonth(it, monthKey);
     }
     // subtract checked items in checklist for that month
     final monthChecks = checklist[monthKey];
     if (monthChecks != null) {
       for (final it in items) {
         if (monthChecks[it.id] == true) {
-          // If item has monthlyAmount, reduce monthlyAmount; else reduce oneTimeAmount if month matches
-          if (it.monthlyAmount != null) {
-            total -= it.monthlyAmount!;
-          } else if (it.oneTimeAmount != null && it.oneTimeMonth == monthKey) {
-            total -= it.oneTimeAmount!;
-          }
+          total -= _deductionForItemInMonth(it, monthKey);
         }
       }
     }
     return total;
+  }
+
+  double _deductionForItemInMonth(BudgetItem it, String monthKey) {
+    final amt = it.amount ?? 0.0;
+    if (it.frequency == 'monthly') {
+      // Applies once per month starting from startDate (if provided)
+      if (it.startDate == null) return amt;
+      try {
+        final sd = DateTime.parse(it.startDate!);
+        final keyDate = DateTime(
+          int.parse(monthKey.split('-')[0]),
+          int.parse(monthKey.split('-')[1]),
+          1,
+        );
+        final lastDay = DateTime(
+          keyDate.year,
+          keyDate.month + 1,
+          1,
+        ).subtract(const Duration(days: 1));
+        if (!sd.isAfter(lastDay)) return amt;
+      } catch (_) {
+        return amt;
+      }
+      return 0.0;
+    } else if (it.frequency == 'weekly') {
+      // Count number of weekly occurrences within the month for the recurring weekly amount
+      if (it.startDate == null) return 0.0;
+      try {
+        final sd = DateTime.parse(it.startDate!);
+        final parts = monthKey.split('-');
+        final firstDay = DateTime(int.parse(parts[0]), int.parse(parts[1]), 1);
+        final lastDay = DateTime(
+          firstDay.year,
+          firstDay.month + 1,
+          1,
+        ).subtract(const Duration(days: 1));
+        if (sd.isAfter(lastDay)) return 0.0;
+        // Find first occurrence >= firstDay
+        int offsetDays = firstDay.difference(sd).inDays;
+        int weeksOffset = 0;
+        if (offsetDays > 0) {
+          weeksOffset = (offsetDays + 6) ~/ 7;
+        }
+        DateTime firstOcc = sd.add(Duration(days: weeksOffset * 7));
+        if (firstOcc.isAfter(lastDay)) return 0.0;
+        final remainingDays = lastDay.difference(firstOcc).inDays;
+        final occurrences = 1 + (remainingDays ~/ 7);
+        return amt * occurrences;
+      } catch (_) {
+        return 0.0;
+      }
+    } else {
+      // once
+      if (it.startDate == null) return 0.0;
+      try {
+        final sd = DateTime.parse(it.startDate!);
+        final parts = monthKey.split('-');
+        if (sd.year == int.parse(parts[0]) && sd.month == int.parse(parts[1]))
+          return amt;
+      } catch (_) {
+        return 0.0;
+      }
+      return 0.0;
+    }
   }
 
   /// Remaining forecast after applying deductions up to and including monthKey

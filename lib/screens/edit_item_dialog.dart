@@ -9,13 +9,17 @@ Future<void> showEditItemDialog(
 ) async {
   final nameCtrl = TextEditingController(text: item.name);
   final amountCtrl = TextEditingController(
-    text: NumberFormat(
-      '#,###',
-    ).format(item.monthlyAmount ?? item.oneTimeAmount ?? 0),
+    text: NumberFormat('#,###').format(item.amount ?? 0),
   );
-  String mode = item.monthlyAmount != null ? 'monthly' : 'one-time';
-  String? oneTimeMonth =
-      item.oneTimeMonth ?? DateFormat('yyyy-MM').format(DateTime.now());
+  String mode = item.frequency; // 'once', 'weekly', 'monthly'
+  DateTime? startDate;
+  if (item.startDate != null) {
+    try {
+      startDate = DateTime.parse(item.startDate!);
+    } catch (_) {
+      startDate = null;
+    }
+  }
   final numberFormat = NumberFormat('#,###');
 
   await showDialog<void>(
@@ -52,39 +56,35 @@ Future<void> showEditItemDialog(
             DropdownButton<String>(
               value: mode,
               items: const [
+                DropdownMenuItem(value: 'once', child: Text('Once')),
+                DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
                 DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
-                DropdownMenuItem(value: 'one-time', child: Text('One-time')),
               ],
               onChanged: (v) {
                 dialogSetState(() {
-                  mode = v ?? 'one-time';
-                  if (mode == 'one-time' &&
-                      (oneTimeMonth == null ||
-                          (oneTimeMonth?.isEmpty ?? true))) {
-                    oneTimeMonth = DateFormat('yyyy-MM').format(DateTime.now());
-                  }
-                  if (mode == 'monthly') oneTimeMonth = null;
+                  mode = v ?? 'once';
+                  if (mode == 'once') startDate ??= DateTime.now();
                 });
               },
             ),
-            if (mode == 'one-time')
+            if (mode == 'weekly' || mode == 'monthly' || mode == 'once')
               TextButton(
                 onPressed: () async {
                   final now = DateTime.now();
                   final d = await showDatePicker(
                     context: context,
-                    initialDate: now,
-                    firstDate: now.subtract(const Duration(days: 365)),
+                    initialDate: startDate ?? now,
+                    firstDate: now.subtract(const Duration(days: 3650)),
                     lastDate: now.add(const Duration(days: 3650)),
                   );
                   if (d != null) {
-                    dialogSetState(
-                      () => oneTimeMonth = DateFormat('yyyy-MM').format(d),
-                    );
+                    dialogSetState(() => startDate = d);
                   }
                 },
                 child: Text(
-                  oneTimeMonth == null ? 'Pick month' : 'Month: $oneTimeMonth',
+                  startDate == null
+                      ? 'Pick date'
+                      : 'Start: ${DateFormat('yyyy-MM-dd').format(startDate!)}',
                 ),
               ),
           ],
@@ -107,9 +107,11 @@ Future<void> showEditItemDialog(
               final updatedItem = BudgetItem(
                 id: item.id,
                 name: name,
-                monthlyAmount: mode == 'monthly' ? amount : null,
-                oneTimeAmount: mode == 'one-time' ? amount : null,
-                oneTimeMonth: mode == 'one-time' ? oneTimeMonth : null,
+                frequency: mode,
+                amount: amount,
+                startDate: startDate == null
+                    ? null
+                    : DateFormat('yyyy-MM-dd').format(startDate!),
               );
               onSave(updatedItem);
               Navigator.of(ctx).pop();

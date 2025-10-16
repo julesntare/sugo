@@ -33,10 +33,16 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final allMonths = _budget.monthKeys();
-    // If item is one-time, only show that specific month (if within budget range)
-    final months = (_item.oneTimeMonth != null)
-        ? (allMonths.contains(_item.oneTimeMonth) ? [_item.oneTimeMonth!] : [])
-        : allMonths;
+    // Determine months to show based on frequency/startDate
+    List<String> months;
+    if (_item.frequency == 'once' && _item.startDate != null) {
+      final key = DateFormat(
+        'yyyy-MM',
+      ).format(DateTime.parse(_item.startDate!));
+      months = allMonths.contains(key) ? [key] : [];
+    } else {
+      months = allMonths;
+    }
     final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
     return Scaffold(
       appBar: AppBar(title: Text(_item.name)),
@@ -45,11 +51,17 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         children: months.map((m) {
           final map = _budget.checklist[m] ?? {};
           final checked = map[_item.id] == true;
-          final label = _item.monthlyAmount != null
-              ? 'Monthly: ${fmt.format(_item.monthlyAmount)} Rwf'
-              : (_item.oneTimeAmount != null
-                    ? 'One-time: ${fmt.format(_item.oneTimeAmount)} Rwf'
-                    : '');
+          String label = '';
+          if (_item.frequency == 'monthly') {
+            label = 'Monthly: ${fmt.format(_item.amount ?? 0)} Rwf';
+          } else if (_item.frequency == 'weekly') {
+            label = 'Weekly: ${fmt.format(_item.amount ?? 0)} Rwf';
+          } else if (_item.frequency == 'once') {
+            label = 'One-time: ${fmt.format(_item.amount ?? 0)} Rwf';
+          }
+          if (_item.startDate != null) {
+            label = '$label\nStart: ${_item.startDate}';
+          }
           return CheckboxListTile(
             title: Text(m),
             subtitle: Text(label),

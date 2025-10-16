@@ -30,8 +30,8 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
     final nameCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
     final numberFormat = NumberFormat('#,###');
-    String mode = 'one-time';
-    String? oneTimeMonth = DateFormat('yyyy-MM').format(DateTime.now());
+    String mode = 'once';
+    DateTime? startDate = DateTime.now();
 
     await showDialog<void>(
       context: context,
@@ -71,45 +71,36 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
               DropdownButton<String>(
                 value: mode,
                 items: const [
+                  DropdownMenuItem(value: 'once', child: Text('Once')),
+                  DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
                   DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
-                  DropdownMenuItem(value: 'one-time', child: Text('One-time')),
                 ],
                 onChanged: (v) {
                   dialogSetState(() {
-                    mode = v ?? 'one-time';
-                    if (mode == 'one-time' &&
-                        (oneTimeMonth == null ||
-                            (oneTimeMonth?.isEmpty ?? true))) {
-                      oneTimeMonth = DateFormat(
-                        'yyyy-MM',
-                      ).format(DateTime.now());
-                    }
-                    if (mode == 'monthly') oneTimeMonth = null;
+                    mode = v ?? 'once';
+                    startDate ??= DateTime.now();
                   });
                 },
               ),
-              if (mode == 'one-time')
-                TextButton(
-                  onPressed: () async {
-                    final now = DateTime.now();
-                    final d = await showDatePicker(
-                      context: context,
-                      initialDate: now,
-                      firstDate: now.subtract(const Duration(days: 365)),
-                      lastDate: now.add(const Duration(days: 3650)),
-                    );
-                    if (d != null) {
-                      dialogSetState(
-                        () => oneTimeMonth = DateFormat('yyyy-MM').format(d),
-                      );
-                    }
-                  },
-                  child: Text(
-                    oneTimeMonth == null
-                        ? 'Pick month'
-                        : 'Month: $oneTimeMonth',
-                  ),
+              TextButton(
+                onPressed: () async {
+                  final now = DateTime.now();
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: startDate ?? now,
+                    firstDate: now.subtract(const Duration(days: 3650)),
+                    lastDate: now.add(const Duration(days: 3650)),
+                  );
+                  if (d != null) {
+                    dialogSetState(() => startDate = d);
+                  }
+                },
+                child: Text(
+                  startDate == null
+                      ? 'Pick date'
+                      : 'Start: ${DateFormat('yyyy-MM-dd').format(startDate!)}',
                 ),
+              ),
             ],
           ),
           actions: [
@@ -126,18 +117,21 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     ) ??
                     0;
                 if (name.isEmpty || amount <= 0) return;
-                if (mode == 'one-time' &&
-                    (oneTimeMonth == null || (oneTimeMonth?.isEmpty ?? true))) {
-                  oneTimeMonth = DateFormat('yyyy-MM').format(DateTime.now());
+                // ensure startDate is set for items that require it
+                if ((mode == 'once' || mode == 'weekly' || mode == 'monthly') &&
+                    startDate == null) {
+                  startDate = DateTime.now();
                 }
 
                 final id = DateTime.now().millisecondsSinceEpoch.toString();
                 final item = BudgetItem(
                   id: id,
                   name: name,
-                  monthlyAmount: mode == 'monthly' ? amount : null,
-                  oneTimeAmount: mode == 'one-time' ? amount : null,
-                  oneTimeMonth: mode == 'one-time' ? oneTimeMonth : null,
+                  frequency: mode,
+                  amount: amount,
+                  startDate: startDate == null
+                      ? null
+                      : DateFormat('yyyy-MM-dd').format(startDate!),
                 );
                 setState(() => _budget.items.add(item));
                 widget.onChanged?.call(_budget);
@@ -181,11 +175,17 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                   )
                 else
                   ..._budget.items.map((it) {
-                    final label = it.monthlyAmount != null
-                        ? 'Monthly: ${fmt.format(it.monthlyAmount)} Rwf'
-                        : (it.oneTimeAmount != null
-                              ? 'One-time: ${fmt.format(it.oneTimeAmount)} Rwf'
-                              : '');
+                    String label = '';
+                    if (it.frequency == 'monthly') {
+                      label = 'Monthly: ${fmt.format(it.amount ?? 0)} Rwf';
+                    } else if (it.frequency == 'weekly') {
+                      label = 'Weekly: ${fmt.format(it.amount ?? 0)} Rwf';
+                    } else {
+                      label = 'One-time: ${fmt.format(it.amount ?? 0)} Rwf';
+                    }
+                    if (it.startDate != null) {
+                      label = '$label\nStart: ${it.startDate}';
+                    }
                     return Dismissible(
                       key: Key(it.id),
                       direction: DismissDirection.endToStart,
@@ -288,12 +288,49 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
           final deductions = _budget.deductionsForMonth(key);
           final remaining = _budget.remainingUpTo(key);
           // render month card with checklist
-          // Only include monthly items every month; one-time items only on their month
-          final monthItems = _budget.items.where((it) {
-            if (it.monthlyAmount != null) return true;
-            if (it.oneTimeAmount != null) return it.oneTimeMonth == key;
-            return false;
-          }).toList();
+          // Determine which items apply to this month depending on frequency and startDate
+          bool _itemAppliesInMonth(BudgetItem it, String monthKey) {
+            try {
+              final parts = monthKey.split('-');
+              final firstDay = DateTime(
+                int.parse(parts[0]),
+                int.parse(parts[1]),
+                1,
+              );
+              final lastDay = DateTime(
+                firstDay.year,
+                firstDay.month + 1,
+                1,
+              ).subtract(const Duration(days: 1));
+              if (it.frequency == 'monthly') {
+                if (it.startDate == null) return true;
+                final sd = DateTime.parse(it.startDate!);
+                return !sd.isAfter(lastDay);
+              } else if (it.frequency == 'weekly') {
+                if (it.startDate == null) return false;
+                final sd = DateTime.parse(it.startDate!);
+                if (sd.isAfter(lastDay)) return false;
+                // find first occurrence >= firstDay
+                int offsetDays = firstDay.difference(sd).inDays;
+                int weeksOffset = 0;
+                if (offsetDays > 0) weeksOffset = (offsetDays + 6) ~/ 7;
+                DateTime firstOcc = sd.add(Duration(days: weeksOffset * 7));
+                if (firstOcc.isAfter(lastDay)) return false;
+                return true;
+              } else {
+                // once
+                if (it.startDate == null) return false;
+                final sd = DateTime.parse(it.startDate!);
+                return sd.year == firstDay.year && sd.month == firstDay.month;
+              }
+            } catch (_) {
+              return false;
+            }
+          }
+
+          final monthItems = _budget.items
+              .where((it) => _itemAppliesInMonth(it, key))
+              .toList();
           final monthChecks = _budget.checklist[key] ?? {};
           return Card(
             color: AppColors.cardGrey,
@@ -339,11 +376,16 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                           style: const TextStyle(color: Colors.white),
                         ),
                         subtitle: Text(
-                          it.monthlyAmount != null
-                              ? 'Monthly: ${fmt.format(it.monthlyAmount)} Rwf'
-                              : (it.oneTimeAmount != null
-                                    ? 'One-time: ${fmt.format(it.oneTimeAmount)} Rwf'
-                                    : ''),
+                          it.frequency == 'monthly'
+                              ? 'Monthly: ${fmt.format(it.amount ?? 0)} Rwf'
+                              : (it.frequency == 'weekly'
+                                        ? 'Weekly: ${fmt.format(it.amount ?? 0)} Rwf'
+                                        : (it.frequency == 'once'
+                                              ? 'One-time: ${fmt.format(it.amount ?? 0)} Rwf'
+                                              : '')) +
+                                    (it.startDate != null
+                                        ? '\nStart: ${it.startDate}'
+                                        : ''),
                           style: TextStyle(color: AppColors.lightGrey),
                         ),
                         trailing: Checkbox(
