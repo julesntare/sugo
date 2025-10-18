@@ -38,7 +38,7 @@ class _SubItemDialogState extends State<SubItemDialog> {
     super.initState();
     if (widget.subItem != null) {
       _nameCtrl.text = widget.subItem!.name;
-      _amountCtrl.text = widget.subItem!.amount.toStringAsFixed(0);
+      _amountCtrl.text = NumberFormat('#,###').format(widget.subItem!.amount);
       _descriptionCtrl.text = widget.subItem!.description ?? '';
       _frequency = widget.subItem!.frequency;
       if (widget.subItem!.startDate != null) {
@@ -50,14 +50,33 @@ class _SubItemDialogState extends State<SubItemDialog> {
       }
       _isCompleted = widget.subItem!.isCompleted;
     }
+    _amountCtrl.addListener(_formatAmount);
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _amountCtrl.removeListener(_formatAmount);
     _amountCtrl.dispose();
     _descriptionCtrl.dispose();
     super.dispose();
+  }
+
+  void _formatAmount() {
+    // Get the current input value and remove any formatting
+    String value = _amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (value.isNotEmpty) {
+      // Parse as integer and format with commas
+      int numValue = int.tryParse(value) ?? 0;
+      String formattedValue = NumberFormat('#,###').format(numValue);
+
+      // Update the text field with the formatted value
+      _amountCtrl.value = TextEditingValue(
+        text: formattedValue,
+        selection: TextSelection.collapsed(offset: formattedValue.length),
+      );
+    }
   }
 
   void _submit() {
@@ -65,7 +84,9 @@ class _SubItemDialogState extends State<SubItemDialog> {
 
     final id =
         widget.subItem?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
-    final amount = double.tryParse(_amountCtrl.text) ?? 0;
+    final amount =
+        double.tryParse(_amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ??
+        0;
 
     final subItem = SubItem(
       id: id,
@@ -155,12 +176,14 @@ class _SubItemDialogState extends State<SubItemDialog> {
                   keyboardType: TextInputType.number,
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Please enter an amount';
-                    final amount = double.tryParse(v);
+                    final amount = int.tryParse(
+                      v.replaceAll(RegExp(r'[^0-9]'), ''),
+                    );
                     if (amount == null) return 'Invalid amount';
                     if (amount <= 0) return 'Amount must be greater than 0';
                     if (widget.maxAmount != null &&
                         amount > widget.maxAmount!) {
-                      return 'Amount cannot exceed ${widget.maxAmount} Rwf';
+                      return 'Amount cannot exceed ${NumberFormat('#,###').format(widget.maxAmount)} Rwf';
                     }
                     return null;
                   },

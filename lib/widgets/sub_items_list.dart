@@ -74,11 +74,6 @@ class _SubItemsListState extends State<SubItemsList> {
 
   // Helper method to get filtered sub-items
   List<SubItem> _getFilteredSubItems() {
-    print(
-      widget.subItems.where(
-        (subItem) => _subItemAppliesInMonth(subItem, widget.monthKey),
-      ),
-    );
     return widget.subItems
         .where((subItem) => _subItemAppliesInMonth(subItem, widget.monthKey))
         .toList();
@@ -249,7 +244,7 @@ class _SubItemsListState extends State<SubItemsList> {
               style: const TextStyle(color: Colors.white),
             ),
             subtitle: Text(
-              '${subItem.amount.toStringAsFixed(0)} Rwf${subItem.description != null ? '\\n' + subItem.description! : ''}',
+              '${NumberFormat('#,###').format(subItem.amount)} Rwf${subItem.description != null ? '\\n' + subItem.description! : ''}',
               style: TextStyle(color: AppColors.lightGrey),
             ),
             value: subItem.isCompleted,
