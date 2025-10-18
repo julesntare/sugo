@@ -249,8 +249,14 @@ class _CreateBudgetDialogState extends State<CreateBudgetDialog> {
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
                                     color: _start != null
-                                        ? Colors.black87
-                                        : Colors.grey[500],
+                                        ? Theme.of(
+                                            context,
+                                          ).textTheme.bodyLarge?.color
+                                        : Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge
+                                              ?.color
+                                              ?.withValues(alpha: 0.6),
                                   ),
                                 ),
                               ],
@@ -304,8 +310,14 @@ class _CreateBudgetDialogState extends State<CreateBudgetDialog> {
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
                                     color: _end != null
-                                        ? Colors.black87
-                                        : Colors.grey[500],
+                                        ? Theme.of(
+                                            context,
+                                          ).textTheme.bodyLarge?.color
+                                        : Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge
+                                              ?.color
+                                              ?.withValues(alpha: 0.6),
                                   ),
                                 ),
                               ],
