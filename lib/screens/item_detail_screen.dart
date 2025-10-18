@@ -301,110 +301,108 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                     },
                     totalAmount: displayAmount,
                     monthKey: m,
+                    parentStartDate: _item.startDate, // Pass parent item's start date
                     hasSubItems: _item.hasSubItems,
                   ),
               ],
             );
-          }).toList(),
+          }),
 
-
-            Column(
-              children: [
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[800],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Sub-items',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+          Column(
+            children: [
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[800],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Sub-items',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 16),
-                      if (_item.subItems.isEmpty)
-                        const Text(
-                          'No sub-items added yet',
-                          style: TextStyle(color: Colors.grey),
-                        )
-                      else
-                        ..._item.subItems.map(
-                          (subItem) => Card(
-                            color: Colors.grey[700],
-                            child: ListTile(
-                              title: Text(
-                                subItem.name,
-                                style: const TextStyle(color: Colors.white),
-                              ),
-                              subtitle: Text(
-                                '${NumberFormat('#,###').format(subItem.amount)} Rwf${subItem.description != null ? '\\n${subItem.description}' : ''}',
-                                style: const TextStyle(color: Colors.grey),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (subItem.isCompleted)
-                                    const Icon(
-                                      Icons.check_circle,
-                                      color: Colors.green,
-                                    ),
-                                  PopupMenuButton(
-                                    icon: const Icon(Icons.more_vert),
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(
-                                        value: 'edit',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.edit, size: 18),
-                                            SizedBox(width: 8),
-                                            Text('Edit'),
-                                          ],
-                                        ),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'delete',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.delete,
-                                              size: 18,
-                                              color: Colors.red,
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text(
-                                              'Delete',
-                                              style: TextStyle(
-                                                color: Colors.red,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                    onSelected: (value) {
-                                      if (value == 'edit') {
-                                        _editSubItem(subItem);
-                                      } else if (value == 'delete') {
-                                        _deleteSubItem(subItem);
-                                      }
-                                    },
+                    ),
+                    const SizedBox(height: 16),
+                    if (_item.subItems.isEmpty)
+                      const Text(
+                        'No sub-items added yet',
+                        style: TextStyle(color: Colors.grey),
+                      )
+                    else
+                      ..._item.subItems.map(
+                        (subItem) => Card(
+                          color: Colors.grey[700],
+                          child: ListTile(
+                            title: Text(
+                              subItem.name,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              '${NumberFormat('#,###').format(subItem.amount)} Rwf${subItem.description != null ? '\\n${subItem.description}' : ''}',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (subItem.isCompleted)
+                                  const Icon(
+                                    Icons.check_circle,
+                                    color: Colors.green,
                                   ),
-                                ],
-                              ),
+                                PopupMenuButton(
+                                  icon: const Icon(Icons.more_vert),
+                                  itemBuilder: (context) => [
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Edit'),
+                                        ],
+                                      ),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.delete,
+                                            size: 18,
+                                            color: Colors.red,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Delete',
+                                            style: TextStyle(color: Colors.red),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  onSelected: (value) {
+                                    if (value == 'edit') {
+                                      _editSubItem(subItem);
+                                    } else if (value == 'delete') {
+                                      _deleteSubItem(subItem);
+                                    }
+                                  },
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
         ],
       ),
       floatingActionButton: _item.hasSubItems
