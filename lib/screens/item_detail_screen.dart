@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/budget.dart';
 import '../models/budget_item.dart';
@@ -119,6 +120,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                                       labelText: 'Amount (Rwf)',
                                     ),
                                     keyboardType: TextInputType.number,
+                                    inputFormatters: [ThousandsFormatter()],
                                   ),
                                   const SizedBox(height: 12),
                                   OutlinedButton.icon(
@@ -160,7 +162,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                                     final parsed =
                                         double.tryParse(
                                           amountCtrl.text.replaceAll(
-                                            RegExp(r'[^\\d\\.]'),
+                                            RegExp(r'[^\d]'),
                                             '',
                                           ),
                                         ) ??
@@ -501,5 +503,43 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       }
       widget.onChanged?.call(_budget);
     }
+  }
+}
+
+class ThousandsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Remove any non-digit characters except decimal point for parsing purposes
+    String newText = newValue.text.replaceAll(RegExp(r'[^0-9.]'), '');
+
+    if (newText.isEmpty) {
+      return newValue.copyWith(text: '');
+    }
+
+    // Handle decimal numbers
+    List<String> parts = newText.split('.');
+    String integerPart = parts[0];
+    String decimalPart = parts.length > 1 ? parts[1] : '';
+
+    // Only format the integer part with thousands separators
+    if (integerPart.isNotEmpty) {
+      int? integerNum = int.tryParse(integerPart);
+      if (integerNum != null) {
+        String formattedInteger = NumberFormat('#,###').format(integerNum);
+        String formattedText = decimalPart.isNotEmpty
+            ? '$formattedInteger.$decimalPart'
+            : formattedInteger;
+
+        return newValue.copyWith(
+          text: formattedText,
+          selection: TextSelection.collapsed(offset: formattedText.length),
+        );
+      }
+    }
+
+    return oldValue;
   }
 }
