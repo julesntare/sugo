@@ -102,15 +102,12 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     onChanged: (value) {
                       if (value.isEmpty) return;
                       // Clean the value by removing all non-digit characters
-                      print(value);
                       String cleanValue = value.replaceAll(
                         RegExp(r'[^\d]'),
                         '',
                       );
-                      print('Clean value: $cleanValue');
                       if (cleanValue.isEmpty) return;
                       int number = int.tryParse(cleanValue) ?? 0;
-                      print('Parsed number: $number');
                       final formatted = numberFormat.format(number);
                       amountCtrl.value = TextEditingValue(
                         text: formatted,
