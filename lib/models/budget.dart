@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 import 'budget_item.dart';
+import 'sub_item.dart';
 
 class Budget {
   final String id;
@@ -114,10 +115,16 @@ class Budget {
       }
     }
 
-    // All applicable items are checked: sum their deductions
+    // All applicable items are checked: sum their deductions considering sub-items
     double total = 0.0;
     for (final it in applicable) {
-      total += _deductionForItemInMonth(it, monthKey);
+      // Calculate the effective deduction considering sub-items
+      final baseDeduction = _deductionForItemInMonth(it, monthKey);
+      final subItemsTotal = subItemTotalForMonthInChecklist(it.id, monthKey);
+
+      // If sub-items total exceeds the base deduction, use the sub-items total
+      // as the effective deduction for this item
+      total += subItemsTotal > 0 ? subItemsTotal : baseDeduction;
     }
     return total;
   }
@@ -254,6 +261,168 @@ class Budget {
     }
   }
 
+  /// Calculate total amount of sub-items for a specific budget item in a specific month based on frequency
+  double subItemTotalForMonth(String itemId, String monthKey) {
+    double total = 0.0;
+    final budgetItem = items.firstWhere(
+      (item) => item.id == itemId,
+      orElse: () => BudgetItem(id: '', name: ''),
+    );
+
+    // Only include sub-items that are applicable in the given month based on frequency
+    for (final subItem in budgetItem.subItems) {
+      if (_isSubItemApplicableInMonth(subItem, monthKey)) {
+        total += subItem.amount;
+      }
+    }
+
+    return total;
+  }
+
+  /// Determine if a sub-item is applicable in a specific month based on its frequency and start date
+  bool _isSubItemApplicableInMonth(SubItem subItem, String monthKey) {
+    try {
+      final parts = monthKey.split('-');
+      final targetYear = int.parse(parts[0]);
+      final targetMonth = int.parse(parts[1]);
+      final targetMonthStart = DateTime(targetYear, targetMonth, 1);
+      final targetMonthEnd = DateTime(targetYear, targetMonth + 1, 0); // Last day of month
+      
+      // For 'once' items, they should appear in the month specified by their start date (if available)
+      if (subItem.frequency == 'once') {
+        if (subItem.startDate != null) {
+          try {
+            final startDate = DateTime.parse(subItem.startDate!);
+            return startDate.year == targetYear && startDate.month == targetMonth;
+          } catch (e) {
+            // If parsing fails, assume it's not applicable
+            return false;
+          }
+        }
+        // If no start date, for backward compatibility with existing sub-items,
+        // they should appear in one specific month, not all months
+        // Let's return false to avoid showing in all months
+        return false;
+      } 
+      // For 'weekly' items, check if they have occurrences in this month
+      else if (subItem.frequency == 'weekly') {
+        if (subItem.startDate != null) {
+          try {
+            final startDate = DateTime.parse(subItem.startDate!);
+            // Check if start date is before or during this month
+            if (startDate.isAfter(targetMonthEnd)) {
+              return false; // Start date is in the future
+            }
+            
+            // Find first occurrence >= start of month
+            int offsetDays = targetMonthStart.difference(startDate).inDays;
+            int weeksOffset = 0;
+            if (offsetDays > 0) {
+              weeksOffset = (offsetDays + 6) ~/ 7; // Round up to next week
+            }
+            DateTime firstOcc = startDate.add(Duration(days: weeksOffset * 7));
+            
+            // Check if any occurrence falls within the target month
+            if (firstOcc.isAfter(targetMonthEnd)) {
+              return false;
+            }
+            return true;
+          } catch (e) {
+            // If parsing fails, assume it's not applicable
+            return false;
+          }
+        }
+        // If no start date, default to false
+        return false;
+      } 
+      // For 'monthly' items, they apply to each month on or after their start date
+      else if (subItem.frequency == 'monthly') {
+        if (subItem.startDate != null) {
+          try {
+            final startDate = DateTime.parse(subItem.startDate!);
+            // Check if the start date is before or during this month
+            return !startDate.isAfter(targetMonthEnd);
+          } catch (e) {
+            // If parsing fails, assume it's not applicable
+            return false;
+          }
+        }
+        // If no start date, default to false
+        return false;
+      }
+      
+      // Default behavior for any other frequency
+      return false;
+    } catch (e) {
+      // If there's an error parsing the date, assume the sub-item is not applicable
+      return false;
+    }
+  }
+
+  /// Calculate total amount of sub-items for a specific budget item in a specific month
+  /// considering only those that are checked in the checklist
+  double subItemTotalForMonthInChecklist(String itemId, String monthKey) {
+    double total = 0.0;
+    final budgetItem = items.firstWhere(
+      (item) => item.id == itemId,
+      orElse: () => BudgetItem(id: '', name: ''),
+    );
+
+    // Get checklist for this month
+    final monthChecklist = checklist[monthKey] ?? {};
+
+    for (final subItem in budgetItem.subItems) {
+      // Only count sub-items that are marked as completed/checked
+      if (monthChecklist.containsKey('subitem_${subItem.id}') &&
+          monthChecklist['subitem_${subItem.id}'] == true) {
+        total += subItem.amount;
+      } else if (subItem.isCompleted) {
+        // If the sub-item is marked as completed in the data
+        total += subItem.amount;
+      }
+    }
+
+    return total;
+  }
+
+  /// Calculate remaining amount for a budget item after sub-items in a specific month
+  double remainingAmountForItemInMonth(String itemId, String monthKey) {
+    final budgetItem = items.firstWhere(
+      (item) => item.id == itemId,
+      orElse: () => BudgetItem(id: '', name: '', amount: 0),
+    );
+    final itemAmountInMonth = _deductionForItemInMonth(budgetItem, monthKey);
+    final subItemTotal = subItemTotalForMonth(itemId, monthKey);
+
+    return itemAmountInMonth - subItemTotal;
+  }
+
+  /// Calculate the total amount of sub-items for a budget item in a month that have been 'completed'
+  double completedSubItemsAmountForMonth(String itemId, String monthKey) {
+    double total = 0.0;
+    final budgetItem = items.firstWhere(
+      (item) => item.id == itemId,
+      orElse: () => BudgetItem(id: '', name: ''),
+    );
+
+    // Get checklist for this month
+    final monthChecklist = checklist[monthKey] ?? {};
+
+    for (final subItem in budgetItem.subItems) {
+      // Check if this sub-item is marked as completed in the checklist
+      // We'll use a naming convention: subitem_itemId_subItemId
+      final checklistKey = 'subitem_${itemId}_${subItem.id}';
+      if (monthChecklist[checklistKey] == true) {
+        total += subItem.amount;
+      } else if (subItem.isCompleted) {
+        // Also consider sub-items marked as completed in the sub-item data
+        total += subItem.amount;
+      }
+    }
+
+    return total;
+  }
+
   /// Return a human-friendly label for the range between previous month's salary date and this
   /// month's salary date. Example: "24 Oct - 24 Nov".
   String monthRangeLabel(String monthKey, {int cutoffDay = 25}) {
@@ -319,6 +488,7 @@ class Budget {
   double remainingUpTo(String monthKey) {
     final keys = monthKeys();
     double remaining = amount;
+
     for (final k in keys) {
       final ded = deductionsForMonth(k);
       remaining -= ded;

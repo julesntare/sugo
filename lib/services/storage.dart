@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/budget.dart';
 import '../models/budget_item.dart';
+import '../models/sub_item.dart';
 import 'database_helper.dart';
 
 class Storage {
@@ -15,6 +16,10 @@ class Storage {
     // Save all items for this budget
     for (var item in budget.items) {
       await _db.insertBudgetItem(budget.id, item);
+      // Save all sub-items for this budget item
+      for (var subItem in item.subItems) {
+        await _db.insertSubItem(item.id, subItem);
+      }
     }
     // Save checklist state to SharedPreferences
     await _saveChecklist(budget.id, budget.checklist);
@@ -41,6 +46,11 @@ class Storage {
       budget.monthItemAmountOverrides.addAll(
         await _loadItemAmountOverrides(id),
       );
+
+      // Load sub-items for each budget item
+      for (var item in budget.items) {
+        item.subItems = await _db.getSubItems(item.id);
+      }
     }
     return budget;
   }
@@ -56,6 +66,11 @@ class Storage {
       budget.monthItemAmountOverrides.addAll(
         await _loadItemAmountOverrides(budget.id),
       );
+
+      // Load sub-items for each budget item
+      for (var item in budget.items) {
+        item.subItems = await _db.getSubItems(item.id);
+      }
     }
     return budgets;
   }
@@ -81,13 +96,16 @@ class Storage {
       await _db.deleteBudgetItem(id);
     }
 
-    // Update or insert each item
+    // Update or insert each item and its sub-items
     for (var item in budget.items) {
       if (existingIds.contains(item.id)) {
         await _db.updateBudgetItem(item);
       } else {
         await _db.insertBudgetItem(budget.id, item);
       }
+
+      // Handle sub-items for this budget item
+      await _updateSubItemsForItem(item);
     }
 
     // Update checklist state
@@ -95,6 +113,28 @@ class Storage {
     await _saveSalaryOverrides(budget.id, budget.monthSalaryOverrides);
     await _saveItemOverrides(budget.id, budget.monthItemOverrides);
     await _saveItemAmountOverrides(budget.id, budget.monthItemAmountOverrides);
+  }
+
+  /// Update sub-items for a budget item
+  static Future<void> _updateSubItemsForItem(BudgetItem item) async {
+    // Get existing sub-items to identify ones that need to be removed
+    final existingSubItems = await _db.getSubItems(item.id);
+    final existingSubIds = existingSubItems.map((e) => e.id).toSet();
+    final newSubIds = item.subItems.map((e) => e.id).toSet();
+
+    // Delete sub-items that no longer exist in the budget item
+    for (var id in existingSubIds.difference(newSubIds)) {
+      await _db.deleteSubItem(id);
+    }
+
+    // Update or insert each sub-item
+    for (var subItem in item.subItems) {
+      if (existingSubIds.contains(subItem.id)) {
+        await _db.updateSubItem(subItem);
+      } else {
+        await _db.insertSubItem(item.id, subItem);
+      }
+    }
   }
 
   /// Add a new item to a budget
@@ -110,6 +150,21 @@ class Storage {
   /// Delete a budget item
   static Future<void> deleteBudgetItem(String id) async {
     await _db.deleteBudgetItem(id);
+  }
+
+  /// Add a new sub-item to a budget item
+  static Future<void> addSubItem(String budgetItemId, SubItem subItem) async {
+    await _db.insertSubItem(budgetItemId, subItem);
+  }
+
+  /// Update an existing sub-item
+  static Future<void> updateSubItem(SubItem subItem) async {
+    await _db.updateSubItem(subItem);
+  }
+
+  /// Delete a sub-item
+  static Future<void> deleteSubItem(String id) async {
+    await _db.deleteSubItem(id);
   }
 
   // Helper methods for checklist persistence using SharedPreferences

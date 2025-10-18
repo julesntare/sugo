@@ -8,6 +8,7 @@ Future<void> showEditItemDialog(
   Function(BudgetItem) onSave, {
   DateTime? preferredDate,
 }) async {
+  final formKey = GlobalKey<FormState>();
   final nameCtrl = TextEditingController(text: item.name);
   final amountCtrl = TextEditingController(
     text: NumberFormat('#,###').format(item.amount ?? 0),
@@ -21,6 +22,7 @@ Future<void> showEditItemDialog(
       startDate = null;
     }
   }
+  bool enableSubItems = item.hasSubItems; // Track sub-items toggle state
   final numberFormat = NumberFormat('#,###');
 
   await showDialog<void>(
@@ -28,69 +30,107 @@ Future<void> showEditItemDialog(
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, dialogSetState) => AlertDialog(
         title: const Text('Edit item'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-            TextField(
-              controller: amountCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                suffixText: 'Rwf',
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (value) {
-                if (value.isEmpty) return;
-                value = value.replaceAll(RegExp(r'[^\d]'), '');
-                if (value.isEmpty) return;
-                final number = int.tryParse(value) ?? 0;
-                final formatted = numberFormat.format(number);
-                amountCtrl.value = TextEditingValue(
-                  text: formatted,
-                  selection: TextSelection.collapsed(offset: formatted.length),
-                );
-              },
-            ),
-            DropdownButton<String>(
-              value: mode,
-              items: const [
-                DropdownMenuItem(value: 'once', child: Text('Once')),
-                DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
-                DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
-              ],
-              onChanged: (v) {
-                dialogSetState(() {
-                  mode = v ?? 'once';
-                  if (mode == 'once') startDate ??= DateTime.now();
-                });
-              },
-            ),
-            if (mode == 'weekly' || mode == 'monthly' || mode == 'once')
-              TextButton(
-                onPressed: () async {
-                  final now = DateTime.now();
-                  // Prefer a supplied preferredDate (e.g., the month range end) when opening the picker
-                  final initial = preferredDate ?? startDate ?? now;
-                  final d = await showDatePicker(
-                    context: context,
-                    initialDate: initial,
-                    firstDate: now.subtract(const Duration(days: 3650)),
-                    lastDate: now.add(const Duration(days: 3650)),
-                  );
-                  if (d != null) {
-                    dialogSetState(() => startDate = d);
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Name'),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter a name';
                   }
+                  return null;
                 },
-                child: Text(
-                  startDate == null
-                      ? 'Pick date'
-                      : 'Start: ${DateFormat('yyyy-MM-dd').format(startDate!)}',
-                ),
               ),
-          ],
+              TextFormField(
+                controller: amountCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Amount',
+                  suffixText: 'Rwf',
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null ||
+                      value.trim().isEmpty ||
+                      value.replaceAll(RegExp(r'[,\s]'), '') == '0') {
+                    return 'Please enter an amount greater than 0';
+                  }
+                  final cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                  final amount = double.tryParse(cleanValue) ?? 0;
+                  if (amount <= 0) {
+                    return 'Amount must be greater than 0';
+                  }
+                  return null;
+                },
+                onChanged: (value) {
+                  if (value.isEmpty) return;
+                  value = value.replaceAll(RegExp(r'[^\d]'), '');
+                  if (value.isEmpty) return;
+                  final number = int.tryParse(value) ?? 0;
+                  final formatted = numberFormat.format(number);
+                  amountCtrl.value = TextEditingValue(
+                    text: formatted,
+                    selection: TextSelection.collapsed(
+                      offset: formatted.length,
+                    ),
+                  );
+                },
+              ),
+              DropdownButton<String>(
+                value: mode,
+                items: const [
+                  DropdownMenuItem(value: 'once', child: Text('Once')),
+                  DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
+                  DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                ],
+                onChanged: (v) {
+                  dialogSetState(() {
+                    mode = v ?? 'once';
+                    if (mode == 'once') startDate ??= DateTime.now();
+                  });
+                },
+              ),
+              if (mode == 'weekly' || mode == 'monthly' || mode == 'once')
+                TextButton(
+                  onPressed: () async {
+                    final now = DateTime.now();
+                    // Prefer a supplied preferredDate (e.g., the month range end) when opening the picker
+                    final initial = preferredDate ?? startDate ?? now;
+                    final d = await showDatePicker(
+                      context: context,
+                      initialDate: initial,
+                      firstDate: now.subtract(const Duration(days: 3650)),
+                      lastDate: now.add(const Duration(days: 3650)),
+                    );
+                    if (d != null) {
+                      dialogSetState(() => startDate = d);
+                    }
+                  },
+                  child: Text(
+                    startDate == null
+                        ? 'Pick date'
+                        : 'Start: ${DateFormat('yyyy-MM-dd').format(startDate!)}',
+                  ),
+                ),
+              const SizedBox(height: 8),
+              // Add toggle for sub-items
+              SwitchListTile(
+                title: const Text('Enable Sub-items'),
+                subtitle: const Text(
+                  'Allow adding detailed sub-items to this budget item',
+                ),
+                value: enableSubItems,
+                onChanged: (value) {
+                  dialogSetState(() {
+                    enableSubItems = value;
+                  });
+                },
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -99,25 +139,27 @@ Future<void> showEditItemDialog(
           ),
           ElevatedButton(
             onPressed: () {
-              final name = nameCtrl.text.trim();
-              final amount =
-                  double.tryParse(
-                    amountCtrl.text.replaceAll(RegExp(r'[^\d]'), ''),
-                  ) ??
-                  0;
-              if (name.isEmpty || amount <= 0) return;
+              if (formKey.currentState?.validate() == true) {
+                final name = nameCtrl.text.trim();
+                final amount =
+                    double.tryParse(
+                      amountCtrl.text.replaceAll(RegExp(r'[^\d]'), ''),
+                    ) ??
+                    0;
 
-              final updatedItem = BudgetItem(
-                id: item.id,
-                name: name,
-                frequency: mode,
-                amount: amount,
-                startDate: startDate == null
-                    ? null
-                    : DateFormat('yyyy-MM-dd').format(startDate!),
-              );
-              onSave(updatedItem);
-              Navigator.of(ctx).pop();
+                final updatedItem = BudgetItem(
+                  id: item.id,
+                  name: name,
+                  frequency: mode,
+                  amount: amount,
+                  startDate: startDate == null
+                      ? null
+                      : DateFormat('yyyy-MM-dd').format(startDate!),
+                  hasSubItems: enableSubItems,
+                );
+                onSave(updatedItem);
+                Navigator.of(ctx).pop();
+              }
             },
             child: const Text('SAVE'),
           ),

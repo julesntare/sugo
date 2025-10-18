@@ -1,3 +1,5 @@
+import 'sub_item.dart';
+
 class BudgetItem {
   final String id;
   final String name;
@@ -11,13 +13,21 @@ class BudgetItem {
   /// ISO date string (yyyy-MM-dd) indicating when weekly/monthly frequency starts, or when a one-time purchase occurs.
   final String? startDate;
 
+  /// Whether this budget item supports sub-items
+  final bool hasSubItems;
+
+  /// List of sub-items for this budget item
+  List<SubItem> subItems;
+
   BudgetItem({
     required this.id,
     required this.name,
     this.frequency = 'once',
     this.amount,
     this.startDate,
-  });
+    this.hasSubItems = false,
+    List<SubItem>? subItems,
+  }) : subItems = List<SubItem>.from(subItems ?? <SubItem>[]);
 
   BudgetItem copyWith({
     String? id,
@@ -25,6 +35,8 @@ class BudgetItem {
     String? frequency,
     double? amount,
     String? startDate,
+    bool? hasSubItems,
+    List<SubItem>? subItems,
   }) {
     return BudgetItem(
       id: id ?? this.id,
@@ -32,6 +44,8 @@ class BudgetItem {
       frequency: frequency ?? this.frequency,
       amount: amount ?? this.amount,
       startDate: startDate ?? this.startDate,
+      hasSubItems: hasSubItems ?? this.hasSubItems,
+      subItems: subItems ?? this.subItems,
     );
   }
 
@@ -42,6 +56,7 @@ class BudgetItem {
     'frequency': frequency,
     'amount': amount,
     'start_date': startDate,
+    'has_sub_items': hasSubItems ? 1 : 0,
   };
 
   // Create from SQLite row
@@ -51,10 +66,20 @@ class BudgetItem {
     frequency: map['frequency'] as String? ?? 'once',
     amount: (map['amount'] as num?)?.toDouble(),
     startDate: map['start_date'] as String?,
+    hasSubItems: (map['has_sub_items'] as int?) == 1,
+    subItems: [], // Sub-items will be loaded separately
   );
 
   // For backwards compatibility and JSON serialization
-  Map<String, dynamic> toJson() => toMap();
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'frequency': frequency,
+    'amount': amount,
+    'start_date': startDate,
+    'has_sub_items': hasSubItems,
+    'subItems': subItems.map((e) => e.toJson()).toList(),
+  };
 
   factory BudgetItem.fromJson(Map<String, dynamic> json) => BudgetItem(
     id: json['id'] as String,
@@ -62,5 +87,11 @@ class BudgetItem {
     frequency: json['frequency'] as String? ?? 'once',
     amount: (json['amount'] as num?)?.toDouble(),
     startDate: json['startDate'] as String?,
+    hasSubItems: json['has_sub_items'] as bool? ?? false,
+    subItems:
+        (json['subItems'] as List<dynamic>?)
+            ?.map((e) => SubItem.fromJson(e as Map<String, dynamic>))
+            .toList() ?? 
+        <SubItem>[],
   );
 }

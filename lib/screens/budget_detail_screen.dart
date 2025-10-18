@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
 import '../models/budget.dart';
 import '../models/budget_item.dart';
 import '../services/storage.dart';
@@ -11,6 +10,7 @@ import 'edit_item_dialog.dart';
 class BudgetDetailScreen extends StatefulWidget {
   final Budget budget;
   final void Function(Budget updated)? onChanged;
+
   const BudgetDetailScreen({super.key, required this.budget, this.onChanged});
 
   @override
@@ -18,19 +18,32 @@ class BudgetDetailScreen extends StatefulWidget {
 }
 
 class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
-  late Budget _budget;
+  late Budget _budget = widget.budget;
 
   @override
   void initState() {
     super.initState();
-    _budget = widget.budget;
+    _loadBudget();
+  }
+
+  Future<void> _loadBudget() async {
+    final budget = await Storage.loadBudget(widget.budget.id);
+    if (budget != null && mounted) {
+      setState(() {
+        _budget = budget;
+      });
+    } else if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _addItemDialog() async {
+    final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController();
-    final amountCtrl = TextEditingController();
+    final amountCtrl = TextEditingController(text: '');
     final numberFormat = NumberFormat('#,###');
     String mode = 'once';
+    bool enableSubItems = false; // Default to disabled
     DateTime? startDate = DateTime.now();
 
     await showDialog<void>(
@@ -40,87 +53,133 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
           backgroundColor: AppColors.slate,
           title: const Text('Add item'),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Name',
-                    prefixIcon: Icon(Icons.label, color: AppColors.lightGrey),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Name',
+                      prefixIcon: Icon(Icons.label, color: AppColors.lightGrey),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter a name';
+                      }
+                      return null;
+                    },
                   ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: amountCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Amount',
-                    suffixText: 'Rwf',
-                    prefixIcon: Icon(
-                      Icons.payments,
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: amountCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Amount',
+                      suffixText: 'Rwf',
+                      prefixIcon: Icon(
+                        Icons.payments,
+                        color: AppColors.lightGrey,
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value == null ||
+                          value.trim().isEmpty ||
+                          value.replaceAll(RegExp(r'[,\s]'), '') == '0') {
+                        return 'Please enter an amount greater than 0';
+                      }
+                      final amount =
+                          int.tryParse(
+                            value.replaceAll(RegExp(r'[^\d]'), ''),
+                          ) ??
+                          0;
+                      if (amount <= 0) {
+                        return 'Amount must be greater than 0';
+                      }
+                      return null;
+                    },
+                    onChanged: (value) {
+                      if (value.isEmpty) return;
+                      // Clean the value by removing all non-digit characters
+                      print(value);
+                      String cleanValue = value.replaceAll(
+                        RegExp(r'[^\d]'),
+                        '',
+                      );
+                      print('Clean value: $cleanValue');
+                      if (cleanValue.isEmpty) return;
+                      int number = int.tryParse(cleanValue) ?? 0;
+                      print('Parsed number: $number');
+                      final formatted = numberFormat.format(number);
+                      amountCtrl.value = TextEditingValue(
+                        text: formatted,
+                        selection: TextSelection.collapsed(
+                          offset: formatted.length,
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: mode,
+                    decoration: const InputDecoration(labelText: 'Frequency'),
+                    items: const [
+                      DropdownMenuItem(value: 'once', child: Text('Once')),
+                      DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
+                      DropdownMenuItem(
+                        value: 'monthly',
+                        child: Text('Monthly'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      dialogSetState(() {
+                        mode = v ?? 'once';
+                        startDate ??= DateTime.now();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final now = DateTime.now();
+                      final d = await showDatePicker(
+                        context: context,
+                        initialDate: startDate ?? now,
+                        firstDate: now.subtract(const Duration(days: 3650)),
+                        lastDate: now.add(const Duration(days: 3650)),
+                      );
+                      if (d != null) {
+                        dialogSetState(() => startDate = d);
+                      }
+                    },
+                    icon: const Icon(
+                      Icons.calendar_today,
                       color: AppColors.lightGrey,
                     ),
+                    label: Text(
+                      startDate == null
+                          ? 'Pick date'
+                          : 'Start: ${DateFormat('yyyy-MM-dd').format(startDate!)}',
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide.none,
+                      backgroundColor: AppColors.slateTint8,
+                    ),
                   ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (value) {
-                    if (value.isEmpty) return;
-                    value = value.replaceAll(RegExp(r'[^\d]'), '');
-                    if (value.isEmpty) return;
-                    final number = int.tryParse(value) ?? 0;
-                    final formatted = numberFormat.format(number);
-                    amountCtrl.value = TextEditingValue(
-                      text: formatted,
-                      selection: TextSelection.collapsed(
-                        offset: formatted.length,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  value: mode,
-                  decoration: const InputDecoration(labelText: 'Frequency'),
-                  items: const [
-                    DropdownMenuItem(value: 'once', child: Text('Once')),
-                    DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
-                    DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
-                  ],
-                  onChanged: (v) {
-                    dialogSetState(() {
-                      mode = v ?? 'once';
-                      startDate ??= DateTime.now();
-                    });
-                  },
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final now = DateTime.now();
-                    final d = await showDatePicker(
-                      context: context,
-                      initialDate: startDate ?? now,
-                      firstDate: now.subtract(const Duration(days: 3650)),
-                      lastDate: now.add(const Duration(days: 3650)),
-                    );
-                    if (d != null) {
-                      dialogSetState(() => startDate = d);
-                    }
-                  },
-                  icon: const Icon(
-                    Icons.calendar_today,
-                    color: AppColors.lightGrey,
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    title: const Text('Enable Sub-items'),
+                    subtitle: const Text('Allow adding detailed sub-items'),
+                    value: enableSubItems,
+                    onChanged: (value) {
+                      dialogSetState(() {
+                        enableSubItems = value;
+                      });
+                    },
                   ),
-                  label: Text(
-                    startDate == null
-                        ? 'Pick date'
-                        : 'Start: ${DateFormat('yyyy-MM-dd').format(startDate!)}',
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide.none,
-                    backgroundColor: AppColors.slateTint8,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           actions: [
@@ -130,31 +189,35 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                final name = nameCtrl.text.trim();
-                final amount =
-                    double.tryParse(
-                      amountCtrl.text.replaceAll(RegExp(r'[^\d]'), ''),
-                    ) ??
-                    0;
-                if (name.isEmpty || amount <= 0) return;
-                if ((mode == 'once' || mode == 'weekly' || mode == 'monthly') &&
-                    startDate == null) {
-                  startDate = DateTime.now();
-                }
+                if (formKey.currentState?.validate() == true) {
+                  final name = nameCtrl.text.trim();
+                  final amount =
+                      double.tryParse(
+                        amountCtrl.text.replaceAll(RegExp(r'[^\d]'), ''),
+                      ) ??
+                      0;
+                  if ((mode == 'once' ||
+                          mode == 'weekly' ||
+                          mode == 'monthly') &&
+                      startDate == null) {
+                    startDate = DateTime.now();
+                  }
 
-                final id = DateTime.now().millisecondsSinceEpoch.toString();
-                final item = BudgetItem(
-                  id: id,
-                  name: name,
-                  frequency: mode,
-                  amount: amount,
-                  startDate: startDate == null
-                      ? null
-                      : DateFormat('yyyy-MM-dd').format(startDate!),
-                );
-                setState(() => _budget.items.add(item));
-                widget.onChanged?.call(_budget);
-                Navigator.of(ctx).pop();
+                  final id = DateTime.now().millisecondsSinceEpoch.toString();
+                  final item = BudgetItem(
+                    id: id,
+                    name: name,
+                    frequency: mode,
+                    amount: amount,
+                    startDate: startDate == null
+                        ? null
+                        : DateFormat('yyyy-MM-dd').format(startDate!),
+                    hasSubItems: enableSubItems,
+                  );
+                  setState(() => _budget.items.add(item));
+                  widget.onChanged?.call(_budget);
+                  Navigator.of(ctx).pop();
+                }
               },
               child: const Text('Add'),
             ),
@@ -188,11 +251,14 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
         final nextKey =
             '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
         final isLast = allMonths.isNotEmpty && monthKey == allMonths.last;
-        DateTime endDate = isLast
-            ? _budget.end
-            : _budget
-                  .salaryDateForMonth(nextKey)
-                  .subtract(const Duration(days: 1));
+        DateTime endDate;
+        // If this is the last month of the budget, end at budget.end
+        if (isLast) {
+          endDate = _budget.end;
+        } else {
+          final nextSalary = _budget.salaryDateForMonth(nextKey);
+          endDate = nextSalary.subtract(const Duration(days: 1));
+        }
 
         // If start and end are the same day, filter this month out
         return !(startDate.year == endDate.year &&
@@ -238,7 +304,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                       label = 'One-time: ${fmt.format(it.amount ?? 0)} Rwf';
                     }
                     if (it.startDate != null) {
-                      label = '$label\nStart: ${it.startDate}';
+                      label = '$label \n Start: ${it.startDate}';
                     }
                     return Dismissible(
                       key: Key(it.id),

@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/budget.dart';
 import '../models/budget_item.dart';
+import '../models/sub_item.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -22,7 +23,7 @@ class DatabaseHelper {
     // bump database version to 2 to add frequency/start_date to budget_items
     return await openDatabase(
       path,
-      version: 2,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -47,7 +48,22 @@ class DatabaseHelper {
         frequency TEXT DEFAULT 'once',
         amount REAL,
         start_date TEXT,
+        has_sub_items INTEGER DEFAULT 0,
         FOREIGN KEY (budget_id) REFERENCES budgets (id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE sub_items(
+        id TEXT PRIMARY KEY,
+        budget_item_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        amount REAL NOT NULL,
+        description TEXT,
+        is_completed INTEGER DEFAULT 0,
+        frequency TEXT DEFAULT 'once',
+        start_date TEXT,
+        FOREIGN KEY (budget_item_id) REFERENCES budget_items (id) ON DELETE CASCADE
       )
     ''');
   }
@@ -66,6 +82,46 @@ class DatabaseHelper {
       try {
         await db.execute('ALTER TABLE budget_items ADD COLUMN start_date TEXT');
       } catch (_) {}
+    }
+
+    if (oldVersion < 3) {
+      // Create sub_items table
+      await db.execute('''
+        CREATE TABLE sub_items(
+          id TEXT PRIMARY KEY,
+          budget_item_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          amount REAL NOT NULL,
+          description TEXT,
+          is_completed INTEGER DEFAULT 0,
+          frequency TEXT DEFAULT 'once',
+          FOREIGN KEY (budget_item_id) REFERENCES budget_items (id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    
+    if (oldVersion < 4) {
+      // Add has_sub_items column to budget_items table if it doesn't exist
+      try {
+        await db.execute('ALTER TABLE budget_items ADD COLUMN has_sub_items INTEGER DEFAULT 0');
+      } catch (_) {
+        // Column may already exist, ignore error
+      }
+      // Add frequency column to existing sub_items table if it doesn't exist  
+      try {
+        await db.execute('ALTER TABLE sub_items ADD COLUMN frequency TEXT DEFAULT \'once\'');
+      } catch (_) {
+        // Column may already exist, ignore error
+      }
+    }
+    
+    if (oldVersion < 5) {
+      // Add start_date column to existing sub_items table if it doesn't exist
+      try {
+        await db.execute('ALTER TABLE sub_items ADD COLUMN start_date TEXT');
+      } catch (_) {
+        // Column may already exist, ignore error
+      }
     }
   }
 
@@ -87,7 +143,7 @@ class DatabaseHelper {
     if (maps.isEmpty) return null;
 
     final budget = Budget.fromMap(maps.first);
-    // Load budget items
+    // Load budget items (which will include sub-items)
     final items = await getBudgetItems(id);
     budget.items = items;
     return budget;
@@ -98,7 +154,7 @@ class DatabaseHelper {
     final budgetMaps = await db.query('budgets');
     final budgets = budgetMaps.map((map) => Budget.fromMap(map)).toList();
 
-    // Load items for each budget
+    // Load items for each budget (which will include sub-items)
     for (var budget in budgets) {
       budget.items = await getBudgetItems(budget.id);
     }
@@ -143,7 +199,14 @@ class DatabaseHelper {
       whereArgs: [budgetId],
     );
 
-    return maps.map((map) => BudgetItem.fromMap(map)).toList();
+    final items = maps.map((map) => BudgetItem.fromMap(map)).toList();
+
+    // Load sub-items for each budget item
+    for (var item in items) {
+      item.subItems = await getSubItems(item.id);
+    }
+
+    return items;
   }
 
   Future<int> updateBudgetItem(BudgetItem item) async {
@@ -159,6 +222,45 @@ class DatabaseHelper {
   Future<int> deleteBudgetItem(String id) async {
     final db = await instance.database;
     return await db.delete('budget_items', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // SubItem operations
+  Future<String> insertSubItem(String budgetItemId, SubItem subItem) async {
+    final db = await instance.database;
+    final subItemMap = subItem.toMap();
+    subItemMap['budget_item_id'] = budgetItemId;
+    await db.insert(
+      'sub_items',
+      subItemMap,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    return subItem.id;
+  }
+
+  Future<List<SubItem>> getSubItems(String budgetItemId) async {
+    final db = await instance.database;
+    final maps = await db.query(
+      'sub_items',
+      where: 'budget_item_id = ?',
+      whereArgs: [budgetItemId],
+    );
+
+    return maps.map((map) => SubItem.fromMap(map)).toList();
+  }
+
+  Future<int> updateSubItem(SubItem subItem) async {
+    final db = await instance.database;
+    return db.update(
+      'sub_items',
+      subItem.toMap(),
+      where: 'id = ?',
+      whereArgs: [subItem.id],
+    );
+  }
+
+  Future<int> deleteSubItem(String id) async {
+    final db = await instance.database;
+    return await db.delete('sub_items', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> close() async {

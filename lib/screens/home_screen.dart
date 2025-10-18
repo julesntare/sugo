@@ -59,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Budget'),
-        content: Text('Are you sure you want to delete "${budget.title}"?'),
+        content: Text('Are you sure you want to delete \"${budget.title}\"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -260,8 +260,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   'Overview',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
               ],
             ),
