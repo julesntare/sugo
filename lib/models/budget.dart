@@ -373,8 +373,9 @@ class Budget {
 
     for (final subItem in budgetItem.subItems) {
       // Only count sub-items that are marked as completed/checked
-      if (monthChecklist.containsKey('subitem_${subItem.id}') &&
-          monthChecklist['subitem_${subItem.id}'] == true) {
+      final checklistKey = 'subitem_${itemId}_${subItem.id}';
+      if (monthChecklist.containsKey(checklistKey) &&
+          monthChecklist[checklistKey] == true) {
         total += subItem.amount;
       } else if (subItem.isCompleted) {
         // If the sub-item is marked as completed in the data
@@ -410,7 +411,7 @@ class Budget {
 
     for (final subItem in budgetItem.subItems) {
       // Check if this sub-item is marked as completed in the checklist
-      // We'll use a naming convention: subitem_itemId_subItemId
+      // Use the naming convention: subitem_itemId_subItemId
       final checklistKey = 'subitem_${itemId}_${subItem.id}';
       if (monthChecklist[checklistKey] == true) {
         total += subItem.amount;

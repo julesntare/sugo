@@ -215,6 +215,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 if (_item.hasSubItems)
                   SubItemsList(
                     subItems: _item.subItems,
+                    parentItemId: _item.id, // Pass the parent item ID
                     onEdit: (subItem) async {
                       final updatedSubItem = await showSubItemDialog(
                         context,
@@ -280,27 +281,35 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                         widget.onChanged?.call(_budget);
                       }
                     },
-                    onToggleCompleted: (subItem) async {
+                    onToggleCompleted: (subItem, monthKey) async {
                       setState(() {
-                        final subItemIndex = _item.subItems.indexWhere(
-                          (s) => s.id == subItem.id,
-                        );
-                        if (subItemIndex != -1) {
-                          _item.subItems[subItemIndex] = subItem;
-                        }
+                        // Update the checklist for this month with the sub-item completion status
+                        final monthChecklist = _budget.checklist[monthKey] ?? {};
+                        final checklistKey = 'subitem_${_item.id}_${subItem.id}';
+                        monthChecklist[checklistKey] = subItem.isCompleted;
+                        _budget.checklist[monthKey] = monthChecklist;
                       });
+                      // Only update the sub-item if the global completion status needs to be changed
+                      // This is for backward compatibility
+                      final subItemIndex = _item.subItems.indexWhere(
+                        (s) => s.id == subItem.id,
+                      );
+                      if (subItemIndex != -1) {
+                        _item.subItems[subItemIndex] = subItem;
+                      }
                       await Storage.updateSubItem(subItem);
                       // Update budget item in the main budget
                       final itemIndex = _budget.items.indexWhere(
                         (item) => item.id == _item.id,
                       );
                       if (itemIndex != -1) {
-                        _budget.items[itemIndex] = _item;
+                          _budget.items[itemIndex] = _item;
                       }
                       widget.onChanged?.call(_budget);
                     },
                     totalAmount: displayAmount,
                     monthKey: m,
+                    checklist: _budget.checklist[m], // Pass the checklist for this month
                     parentStartDate: _item.startDate, // Pass parent item's start date
                     hasSubItems: _item.hasSubItems,
                   ),

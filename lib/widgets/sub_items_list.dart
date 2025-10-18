@@ -5,22 +5,26 @@ import '../widgets/app_theme.dart';
 
 class SubItemsList extends StatefulWidget {
   final List<SubItem> subItems;
+  final String parentItemId; // Added parent item ID
   final Function(SubItem) onEdit;
   final Function(SubItem) onDelete;
-  final Function(SubItem) onToggleCompleted;
+  final Function(SubItem, String) onToggleCompleted; // Added monthKey parameter
   final double totalAmount;
   final String monthKey;
+  final Map<String, bool>? checklist; // Added checklist parameter
   final String? parentStartDate;
   final bool hasSubItems;
 
   const SubItemsList({
     super.key,
     required this.subItems,
+    required this.parentItemId, // Added parent item ID
     required this.onEdit,
     required this.onDelete,
     required this.onToggleCompleted,
     required this.totalAmount,
     required this.monthKey,
+    this.checklist,
     this.parentStartDate,
     this.hasSubItems = true,
   });
@@ -90,8 +94,16 @@ class _SubItemsListState extends State<SubItemsList> {
       0.0,
       (sum, subItem) => sum + subItem.amount,
     );
+    // Calculate completed sub-items amount using the monthly checklist
     final completedSubItemsAmount = widget.subItems
-        .where((subItem) => subItem.isCompleted)
+        .where((subItem) {
+          // Check if this specific sub-item is marked as completed in this month
+          // Use the pattern: subitem_${parentItemId}_${subItem.id}
+          final checklistKey = 'subitem_${widget.parentItemId}_${subItem.id}';
+          return widget.checklist != null && 
+                 widget.checklist!.containsKey(checklistKey) && 
+                 widget.checklist![checklistKey] == true;
+        })
         .fold(0.0, (sum, subItem) => sum + subItem.amount);
     final progressPercentage = widget.totalAmount > 0
         ? (completedSubItemsAmount / widget.totalAmount) * 100
@@ -247,11 +259,11 @@ class _SubItemsListState extends State<SubItemsList> {
               '${NumberFormat('#,###').format(subItem.amount)} Rwf${subItem.description != null ? '\\n' + subItem.description! : ''}',
               style: TextStyle(color: AppColors.lightGrey),
             ),
-            value: subItem.isCompleted,
+            value: widget.checklist != null && 
+                   widget.checklist!['subitem_${widget.parentItemId}_${subItem.id}'] == true,
             onChanged: (value) {
-              widget.onToggleCompleted(
-                subItem.copyWith(isCompleted: value ?? false),
-              );
+              final updatedSubItem = subItem.copyWith(isCompleted: value ?? false);
+              widget.onToggleCompleted(updatedSubItem, widget.monthKey);
             },
             secondary: PopupMenuButton(
               icon: const Icon(Icons.more_vert, color: Colors.grey),
