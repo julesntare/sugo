@@ -420,13 +420,6 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                         context,
                       ).textTheme.titleMedium?.copyWith(color: Colors.white),
                     ),
-                    // small hint to show separation
-                    Text(
-                      'Tap an item to view details',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.lightGrey,
-                      ),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
