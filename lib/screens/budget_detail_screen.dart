@@ -399,37 +399,53 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
           final monthLabel = _budget.monthRangeLabel(key);
           bool itemAppliesInMonth(BudgetItem it, String monthKey) {
             try {
+              // Determine the date range for this month key based on the budget's salary dates
+              // The range starts with the salary date for this month and ends with one day before
+              // the salary date of the next month (or budget.end if this is the last month)
               final parts = monthKey.split('-');
-              final firstDay = DateTime(
-                int.parse(parts[0]),
-                int.parse(parts[1]),
-                1,
-              );
-              final lastDay = DateTime(
-                firstDay.year,
-                firstDay.month + 1,
-                1,
-              ).subtract(const Duration(days: 1));
+              final year = int.parse(parts[0]);
+              final month = int.parse(parts[1]);
+              
+              // Calculate the start of the range (salary date for this month)
+              final thisMonthSalary = _budget.salaryDateForMonth(monthKey);
+              DateTime rangeStart = thisMonthSalary;
+              
+              // Calculate the end of the range (one day before next month's salary date)
+              final nextDate = DateTime(year, month + 1, 1);
+              final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+              final keys = _budget.monthKeys();
+              DateTime rangeEnd;
+              
+              final isLast = keys.isNotEmpty && monthKey == keys.last;
+              if (isLast) {
+                rangeEnd = _budget.end;
+              } else {
+                final nextSalary = _budget.salaryDateForMonth(nextKey);
+                rangeEnd = nextSalary.subtract(const Duration(days: 1));
+              }
+              
               if (it.frequency == 'monthly') {
                 if (it.startDate == null) return true;
                 final sd = DateTime.parse(it.startDate!);
-                return !sd.isAfter(lastDay);
+                // Monthly items should appear if they start on or before the end of the range
+                return !sd.isAfter(rangeEnd);
               } else if (it.frequency == 'weekly') {
                 if (it.startDate == null) return false;
                 final sd = DateTime.parse(it.startDate!);
-                if (sd.isAfter(lastDay)) return false;
-                // find first occurrence >= firstDay
-                int offsetDays = firstDay.difference(sd).inDays;
+                if (sd.isAfter(rangeEnd)) return false;
+                // Find first occurrence >= rangeStart
+                int offsetDays = rangeStart.difference(sd).inDays;
                 int weeksOffset = 0;
                 if (offsetDays > 0) weeksOffset = (offsetDays + 6) ~/ 7;
                 DateTime firstOcc = sd.add(Duration(days: weeksOffset * 7));
-                if (firstOcc.isAfter(lastDay)) return false;
+                if (firstOcc.isAfter(rangeEnd)) return false;
                 return true;
               } else {
                 // once
                 if (it.startDate == null) return false;
                 final sd = DateTime.parse(it.startDate!);
-                return sd.year == firstDay.year && sd.month == firstDay.month;
+                // For one-time items, check if the start date falls within the range
+                return !sd.isBefore(rangeStart) && !sd.isAfter(rangeEnd);
               }
             } catch (_) {
               return false;
@@ -567,4 +583,5 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
       ),
     );
   }
+
 }
