@@ -286,14 +286,19 @@ class Budget {
       final targetYear = int.parse(parts[0]);
       final targetMonth = int.parse(parts[1]);
       final targetMonthStart = DateTime(targetYear, targetMonth, 1);
-      final targetMonthEnd = DateTime(targetYear, targetMonth + 1, 0); // Last day of month
-      
+      final targetMonthEnd = DateTime(
+        targetYear,
+        targetMonth + 1,
+        0,
+      ); // Last day of month
+
       // For 'once' items, they should appear in the month specified by their start date (if available)
       if (subItem.frequency == 'once') {
         if (subItem.startDate != null) {
           try {
             final startDate = DateTime.parse(subItem.startDate!);
-            return startDate.year == targetYear && startDate.month == targetMonth;
+            return startDate.year == targetYear &&
+                startDate.month == targetMonth;
           } catch (e) {
             // If parsing fails, assume it's not applicable
             return false;
@@ -303,7 +308,7 @@ class Budget {
         // they should appear in one specific month, not all months
         // Let's return false to avoid showing in all months
         return false;
-      } 
+      }
       // For 'weekly' items, check if they have occurrences in this month
       else if (subItem.frequency == 'weekly') {
         if (subItem.startDate != null) {
@@ -313,7 +318,7 @@ class Budget {
             if (startDate.isAfter(targetMonthEnd)) {
               return false; // Start date is in the future
             }
-            
+
             // Find first occurrence >= start of month
             int offsetDays = targetMonthStart.difference(startDate).inDays;
             int weeksOffset = 0;
@@ -321,7 +326,7 @@ class Budget {
               weeksOffset = (offsetDays + 6) ~/ 7; // Round up to next week
             }
             DateTime firstOcc = startDate.add(Duration(days: weeksOffset * 7));
-            
+
             // Check if any occurrence falls within the target month
             if (firstOcc.isAfter(targetMonthEnd)) {
               return false;
@@ -334,7 +339,7 @@ class Budget {
         }
         // If no start date, default to false
         return false;
-      } 
+      }
       // For 'monthly' items, they apply to each month on or after their start date
       else if (subItem.frequency == 'monthly') {
         if (subItem.startDate != null) {
@@ -350,7 +355,7 @@ class Budget {
         // If no start date, default to false
         return false;
       }
-      
+
       // Default behavior for any other frequency
       return false;
     } catch (e) {

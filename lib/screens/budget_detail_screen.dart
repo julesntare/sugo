@@ -227,51 +227,17 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final allMonths = _budget.monthKeys();
-    // Filter out months where the computed start and end dates are identical
-    final months = allMonths.where((monthKey) {
-      try {
-        final parts = monthKey.split('-');
-        final year = int.parse(parts[0]);
-        final month = int.parse(parts[1]);
-
-        // start date: salary date for this month, unless first month and budget.start is after it
-        final thisMonthSalary = _budget.salaryDateForMonth(monthKey);
-        DateTime startDate = thisMonthSalary;
-        if (allMonths.isNotEmpty &&
-            monthKey == allMonths.first &&
-            _budget.start.isAfter(thisMonthSalary)) {
-          startDate = _budget.start;
-        }
-
-        // end date: either budget.end for last month, or day before next month's salary
-        final nextDate = DateTime(year, month + 1, 1);
-        final nextKey =
-            '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
-        final isLast = allMonths.isNotEmpty && monthKey == allMonths.last;
-        DateTime endDate;
-        // If this is the last month of the budget, end at budget.end
-        if (isLast) {
-          endDate = _budget.end;
-        } else {
-          final nextSalary = _budget.salaryDateForMonth(nextKey);
-          endDate = nextSalary.subtract(const Duration(days: 1));
-        }
-
-        // If start and end are the same day, filter this month out
-        return !(startDate.year == endDate.year &&
-            startDate.month == endDate.month &&
-            startDate.day == endDate.day);
-      } catch (_) {
-        return true;
-      }
-    }).toList();
+    // Filter out months where the computed start and end dates are invalid (end date before start date or identical)
+    final months = allMonths
+        .where((monthKey) => _budget.monthRangeLabel(monthKey).isNotEmpty)
+        .toList();
     final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
 
     return Scaffold(
       appBar: AppBar(title: Text(_budget.title)),
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: months.length + 1,
+        itemCount: months.length,
         itemBuilder: (context, i) {
           if (i == 0) {
             // header with budget items list
@@ -430,11 +396,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
           final key = months[idx];
           final deductions = _budget.deductionsForMonth(key);
           final remaining = _budget.remainingUpTo(key);
-          final monthLabel = _budget.monthRangeLabel(
-            key,
-          ); // e.g. "24 Oct - 24 Nov"
-          // render month card with checklist
-          // Determine which items apply to this month depending on frequency and startDate
+          final monthLabel = _budget.monthRangeLabel(key);
           bool itemAppliesInMonth(BudgetItem it, String monthKey) {
             try {
               final parts = monthKey.split('-');
