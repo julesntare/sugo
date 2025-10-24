@@ -46,10 +46,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       ).format(DateTime.parse(_item.startDate!));
       months = allMonths.contains(key) ? [key] : [];
     } else {
-      months = List.from(allMonths); // Create a copy of the list
-      if (months.isNotEmpty) {
-        months.removeLast(); // Remove the last month
-      }
+      months = List.from(allMonths);
     }
     final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
     return Scaffold(

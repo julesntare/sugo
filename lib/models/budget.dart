@@ -67,6 +67,7 @@ class Budget {
   }
 
   /// Returns list of month keys between start and end inclusive, formatted as YYYY-MM
+  /// Only includes months where the salary date range is valid
   List<String> monthKeys() {
     final months = <String>[];
     final fmt = DateFormat('yyyy-MM');
@@ -86,7 +87,12 @@ class Budget {
       endMonth = tmp;
     }
     while (!d.isAfter(endMonth)) {
-      months.add(fmt.format(d));
+      final monthKey = fmt.format(d);
+      // Only include this month if the salary date for this month is before or equal to budget end
+      final salaryDate = salaryDateForMonth(monthKey);
+      if (!salaryDate.isAfter(end)) {
+        months.add(monthKey);
+      }
       // advance to the first day of next month
       d = DateTime(d.year, d.month + 1, 1);
     }
@@ -459,6 +465,11 @@ class Budget {
       } else {
         final nextSalary = salaryDateForMonth(nextKey, cutoffDay: cutoffDay);
         endDate = nextSalary.subtract(const Duration(days: 1));
+      }
+
+      // Validate: if the range is invalid (end before start or same day), return empty string
+      if (endDate.isBefore(startDate) || endDate.isAtSameMomentAs(startDate)) {
+        return '';
       }
 
       final startDay = _ordinal(startDate.day);
