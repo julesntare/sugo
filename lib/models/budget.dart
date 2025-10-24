@@ -509,6 +509,20 @@ class Budget {
     return remaining;
   }
 
+  /// Calculate the remaining amount for a specific month
+  /// This is the monthly salary allocation minus the deductions for that month
+  double remainingForMonth(String monthKey) {
+    final keys = monthKeys();
+    if (keys.isEmpty) return 0.0;
+
+    // Monthly salary = total budget / number of months
+    final monthlySalary = amount / keys.length;
+
+    // Remaining = monthly salary - deductions for this month
+    final deductions = deductionsForMonth(monthKey);
+    return monthlySalary - deductions;
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,

@@ -282,8 +282,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
       }
     }
 
+    final keys = _budget.monthKeys();
+    final monthlySalary = keys.isNotEmpty ? _budget.amount / keys.length : 0.0;
     final deductions = _budget.deductionsForMonth(key);
-    final remaining = _budget.remainingUpTo(key);
+    final remaining = _budget.remainingForMonth(key);
     final monthLabel = _budget.monthRangeLabel(key);
     final monthItems = _budget.items
         .where((it) => itemAppliesInMonth(it, key))
@@ -348,7 +350,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Deductions: ${fmt.format(deductions)} Rwf • Remaining: ${fmt.format(remaining)} Rwf',
+                'Salary: ${fmt.format(monthlySalary)} Rwf • Deductions: ${fmt.format(deductions)} Rwf • Remaining: ${fmt.format(remaining)} Rwf',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.lightGrey,
                 ),
