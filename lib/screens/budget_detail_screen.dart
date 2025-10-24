@@ -548,12 +548,14 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                         ),
                         trailing: Checkbox(
                           value: checked,
-                          onChanged: (v) {
+                          onChanged: (v) async {
                             setState(() {
                               final map = _budget.checklist[key] ?? {};
                               map[it.id] = v == true;
                               _budget.checklist[key] = map;
                             });
+                            // Persist the checklist change
+                            await Storage.updateBudget(_budget);
                             widget.onChanged?.call(_budget);
                           },
                         ),

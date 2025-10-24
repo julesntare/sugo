@@ -103,28 +103,23 @@ class Budget {
     // If there are no applicable items, nothing to deduct
     if (applicable.isEmpty) return 0.0;
 
-    // If checklist for the month is missing or any applicable item is not checked,
-    // we consider the budget "yet to be checked" and do not reduce the budget.
+    // Get checklist for the month
     final monthChecks = checklist[monthKey];
     if (monthChecks == null) return 0.0;
 
-    for (final it in applicable) {
-      if (monthChecks[it.id] != true) {
-        // At least one applicable item is unchecked -> skip reductions
-        return 0.0;
-      }
-    }
-
-    // All applicable items are checked: sum their deductions considering sub-items
+    // Sum deductions only for checked items
     double total = 0.0;
     for (final it in applicable) {
-      // Calculate the effective deduction considering sub-items
-      final baseDeduction = _deductionForItemInMonth(it, monthKey);
-      final subItemsTotal = subItemTotalForMonthInChecklist(it.id, monthKey);
+      // Only deduct if this item is checked
+      if (monthChecks[it.id] == true) {
+        // Calculate the effective deduction considering sub-items
+        final baseDeduction = _deductionForItemInMonth(it, monthKey);
+        final subItemsTotal = subItemTotalForMonthInChecklist(it.id, monthKey);
 
-      // If sub-items total exceeds the base deduction, use the sub-items total
-      // as the effective deduction for this item
-      total += subItemsTotal > 0 ? subItemsTotal : baseDeduction;
+        // If sub-items total exceeds the base deduction, use the sub-items total
+        // as the effective deduction for this item
+        total += subItemsTotal > 0 ? subItemsTotal : baseDeduction;
+      }
     }
     return total;
   }
