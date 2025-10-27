@@ -74,7 +74,7 @@ lib/
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/yourusername/sugo.git
+   git clone https://github.com/julesntare/sugo.git
    cd sugo
    ```
 
