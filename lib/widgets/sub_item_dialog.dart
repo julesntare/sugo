@@ -2,13 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/sub_item.dart';
 
+/// Result returned from the sub-item dialog
+class SubItemDialogResult {
+  final SubItem subItem;
+  final bool markAsCompleted;
+
+  SubItemDialogResult({required this.subItem, required this.markAsCompleted});
+}
+
 /// Shows a modal dialog to create or edit a sub-item
-Future<SubItem?> showSubItemDialog(
+Future<SubItemDialogResult?> showSubItemDialog(
   BuildContext context, {
   SubItem? subItem,
   double? maxAmount,
 }) async {
-  return showDialog<SubItem>(
+  return showDialog<SubItemDialogResult>(
     context: context,
     builder: (context) => SubItemDialog(subItem: subItem, maxAmount: maxAmount),
   );
@@ -31,7 +39,7 @@ class _SubItemDialogState extends State<SubItemDialog> {
   final _descriptionCtrl = TextEditingController();
   String _frequency = 'once';
   DateTime? _startDate;
-  bool _isCompleted = false;
+  bool _markAsCompleted = false;
 
   @override
   void initState() {
@@ -48,7 +56,6 @@ class _SubItemDialogState extends State<SubItemDialog> {
           _startDate = null;
         }
       }
-      _isCompleted = widget.subItem!.isCompleted;
     } else {
       // Set default name for new sub-items
       _nameCtrl.text = _getDefaultSubItemName();
@@ -129,10 +136,14 @@ class _SubItemDialogState extends State<SubItemDialog> {
       startDate: _startDate != null
           ? DateFormat('yyyy-MM-dd').format(_startDate!)
           : null,
-      isCompleted: _isCompleted,
+      isCompleted:
+          widget.subItem?.isCompleted ??
+          false, // Preserve existing completion status
     );
 
-    Navigator.of(context).pop(subItem);
+    Navigator.of(context).pop(
+      SubItemDialogResult(subItem: subItem, markAsCompleted: _markAsCompleted),
+    );
   }
 
   @override
@@ -181,6 +192,16 @@ class _SubItemDialogState extends State<SubItemDialog> {
                     labelText: 'Sub-item Name',
                     hintText: 'e.g., Groceries, Fuel',
                     prefixIcon: const Icon(Icons.label),
+                    suffixIcon: _nameCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              setState(() {
+                                _nameCtrl.clear();
+                              });
+                            },
+                          )
+                        : null,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -188,6 +209,10 @@ class _SubItemDialogState extends State<SubItemDialog> {
                   validator: (v) => (v == null || v.trim().isEmpty)
                       ? 'Please enter a name'
                       : null,
+                  onChanged: (value) {
+                    // Rebuild to show/hide clear button
+                    setState(() {});
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -290,17 +315,32 @@ class _SubItemDialogState extends State<SubItemDialog> {
                   ),
                 const SizedBox(height: 16),
 
-                // Completed checkbox
-                CheckboxListTile(
-                  title: const Text('Completed'),
-                  value: _isCompleted,
-                  onChanged: (value) {
-                    setState(() {
-                      _isCompleted = value ?? false;
-                    });
-                  },
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
+                // Mark as completed checkbox (only for adding new sub-items)
+                if (!isEditing)
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _markAsCompleted = !_markAsCompleted;
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        children: [
+                          Checkbox(
+                            value: _markAsCompleted,
+                            onChanged: (value) {
+                              setState(() {
+                                _markAsCompleted = value ?? false;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          const Text('Mark as completed'),
+                        ],
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 24),
 
                 // Action buttons

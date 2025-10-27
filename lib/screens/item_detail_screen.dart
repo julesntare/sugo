@@ -274,21 +274,21 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                         parentItemId: _item.id, // Pass the parent item ID
                         budget: _budget, // Pass the budget for salary date calculations
                         onEdit: (subItem) async {
-                          final updatedSubItem = await showSubItemDialog(
+                          final result = await showSubItemDialog(
                             context,
                             subItem: subItem,
                             maxAmount: displayAmount,
                           );
-                          if (updatedSubItem != null) {
+                          if (result != null) {
                             setState(() {
                               final subItemIndex = _item.subItems.indexWhere(
                                 (s) => s.id == subItem.id,
                               );
                               if (subItemIndex != -1) {
-                                _item.subItems[subItemIndex] = updatedSubItem;
+                                _item.subItems[subItemIndex] = result.subItem;
                               }
                             });
-                            await Storage.updateSubItem(updatedSubItem);
+                            await Storage.updateSubItem(result.subItem);
                             // Update budget item in the main budget
                             final itemIndex = _budget.items.indexWhere(
                               (item) => item.id == _item.id,
@@ -494,12 +494,37 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Future<void> _addSubItem() async {
-    final newItem = await showSubItemDialog(context, maxAmount: _item.amount);
-    if (newItem != null) {
+    final result = await showSubItemDialog(context, maxAmount: _item.amount);
+    if (result != null) {
       setState(() {
-        _item.subItems.add(newItem);
+        _item.subItems.add(result.subItem);
+
+        // If user marked as completed, update the checklist for the relevant month
+        if (result.markAsCompleted) {
+          String? monthKey;
+
+          // Determine which month to mark as completed
+          if (result.subItem.startDate != null) {
+            // Use the month from the start date
+            final startDate = DateTime.parse(result.subItem.startDate!);
+            monthKey = DateFormat('yyyy-MM').format(startDate);
+          } else if (result.subItem.frequency == 'once') {
+            // For "once" items without start date, use current month
+            monthKey = DateFormat('yyyy-MM').format(DateTime.now());
+          }
+
+          // Update checklist if we have a month
+          if (monthKey != null && _budget.monthKeys().contains(monthKey)) {
+            final monthChecklist = _budget.checklist[monthKey] ?? {};
+            final checklistKey = 'subitem_${_item.id}_${result.subItem.id}';
+            monthChecklist[checklistKey] = true;
+            _budget.checklist[monthKey] = monthChecklist;
+          }
+        }
       });
-      await Storage.addSubItem(_item.id, newItem);
+      await Storage.addSubItem(_item.id, result.subItem);
+      // Save the budget to persist checklist changes
+      await Storage.updateBudget(_budget);
       // Update budget item in the main budget
       final itemIndex = _budget.items.indexWhere((item) => item.id == _item.id);
       if (itemIndex != -1) {
@@ -510,19 +535,19 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Future<void> _editSubItem(SubItem subItem) async {
-    final updatedItem = await showSubItemDialog(
+    final result = await showSubItemDialog(
       context,
       subItem: subItem,
       maxAmount: _item.amount,
     );
-    if (updatedItem != null) {
+    if (result != null) {
       setState(() {
         final index = _item.subItems.indexWhere((s) => s.id == subItem.id);
         if (index != -1) {
-          _item.subItems[index] = updatedItem;
+          _item.subItems[index] = result.subItem;
         }
       });
-      await Storage.updateSubItem(updatedItem);
+      await Storage.updateSubItem(result.subItem);
       // Update budget item in the main budget
       final itemIndex = _budget.items.indexWhere((item) => item.id == _item.id);
       if (itemIndex != -1) {
