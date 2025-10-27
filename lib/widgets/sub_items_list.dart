@@ -52,7 +52,8 @@ class _SubItemsListState extends State<SubItemsList> {
       DateTime rangeStart = thisMonthSalary;
 
       final nextDate = DateTime(year, month + 1, 1);
-      final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+      final nextKey =
+          '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
       final keys = widget.budget.monthKeys();
       DateTime rangeEnd;
 
@@ -108,19 +109,23 @@ class _SubItemsListState extends State<SubItemsList> {
       return const SizedBox.shrink();
     }
 
-    final totalSubItemsAmount = widget.subItems.fold(
+    // Get filtered sub-items that apply to this month
+    final filteredSubItems = _getFilteredSubItems();
+
+    final totalSubItemsAmount = filteredSubItems.fold(
       0.0,
       (sum, subItem) => sum + subItem.amount,
     );
     // Calculate completed sub-items amount using the monthly checklist
-    final completedSubItemsAmount = widget.subItems
+    // Only count sub-items that apply to this specific month
+    final completedSubItemsAmount = filteredSubItems
         .where((subItem) {
           // Check if this specific sub-item is marked as completed in this month
           // Use the pattern: subitem_${parentItemId}_${subItem.id}
           final checklistKey = 'subitem_${widget.parentItemId}_${subItem.id}';
-          return widget.checklist != null && 
-                 widget.checklist!.containsKey(checklistKey) && 
-                 widget.checklist![checklistKey] == true;
+          return widget.checklist != null &&
+              widget.checklist!.containsKey(checklistKey) &&
+              widget.checklist![checklistKey] == true;
         })
         .fold(0.0, (sum, subItem) => sum + subItem.amount);
     final progressPercentage = widget.totalAmount > 0
@@ -179,7 +184,7 @@ class _SubItemsListState extends State<SubItemsList> {
             child: Column(
               children: [
                 // Progress bar showing how much of the main item's amount is used
-                if (widget.subItems.isNotEmpty)
+                if (filteredSubItems.isNotEmpty)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -226,7 +231,7 @@ class _SubItemsListState extends State<SubItemsList> {
                   ),
 
                 // Sub-items list
-                if (widget.subItems.isEmpty)
+                if (filteredSubItems.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(16),
                     child: Text(
@@ -274,13 +279,17 @@ class _SubItemsListState extends State<SubItemsList> {
               style: const TextStyle(color: Colors.white),
             ),
             subtitle: Text(
-              '${NumberFormat('#,###').format(subItem.amount)} Rwf${subItem.description != null ? '\\n' + subItem.description! : ''}',
+              '${NumberFormat('#,###').format(subItem.amount)} Rwf${subItem.description != null ? '\\n${subItem.description!}' : ''}',
               style: TextStyle(color: AppColors.lightGrey),
             ),
-            value: widget.checklist != null && 
-                   widget.checklist!['subitem_${widget.parentItemId}_${subItem.id}'] == true,
+            value:
+                widget.checklist != null &&
+                widget.checklist!['subitem_${widget.parentItemId}_${subItem.id}'] ==
+                    true,
             onChanged: (value) {
-              final updatedSubItem = subItem.copyWith(isCompleted: value ?? false);
+              final updatedSubItem = subItem.copyWith(
+                isCompleted: value ?? false,
+              );
               widget.onToggleCompleted(updatedSubItem, widget.monthKey);
             },
             secondary: PopupMenuButton(

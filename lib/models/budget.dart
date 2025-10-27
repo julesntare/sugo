@@ -101,30 +101,22 @@ class Budget {
 
   /// Compute expected deductions for a given month key (YYYY-MM)
   double deductionsForMonth(String monthKey) {
-    // Determine which items actually apply to this month (deduction > 0)
-    final applicable = items
-        .where((it) => _deductionForItemInMonth(it, monthKey) > 0.0)
-        .toList();
-
-    // If there are no applicable items, nothing to deduct
-    if (applicable.isEmpty) return 0.0;
-
     // Get checklist for the month
     final monthChecks = checklist[monthKey];
     if (monthChecks == null) return 0.0;
 
-    // Sum deductions only for checked items
+    // Sum deductions for all items
     double total = 0.0;
-    for (final it in applicable) {
+    for (final it in items) {
       // For items with sub-items, calculate deductions based on checked sub-items
-      // even if the parent item is not checked
+      // even if the parent item has no amount or is not checked
       if (it.hasSubItems && it.subItems.isNotEmpty) {
         final subItemsTotal = subItemTotalForMonthInChecklist(it.id, monthKey);
         total += subItemsTotal;
       } else {
-        // Only deduct if this item is checked (for items without sub-items)
-        if (monthChecks[it.id] == true) {
-          final baseDeduction = _deductionForItemInMonth(it, monthKey);
+        // For items without sub-items, only deduct if checked and has non-zero deduction
+        final baseDeduction = _deductionForItemInMonth(it, monthKey);
+        if (baseDeduction > 0.0 && monthChecks[it.id] == true) {
           total += baseDeduction;
         }
       }
@@ -148,7 +140,8 @@ class Budget {
       DateTime rangeStart = thisMonthSalary;
 
       final nextDate = DateTime(year, month + 1, 1);
-      final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+      final nextKey =
+          '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
       final keys = monthKeys();
       DateTime rangeEnd;
 
@@ -268,7 +261,8 @@ class Budget {
       DateTime rangeStart = thisMonthSalary;
 
       final nextDate = DateTime(year, month + 1, 1);
-      final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+      final nextKey =
+          '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
       final keys = monthKeys();
       DateTime rangeEnd;
 
@@ -284,9 +278,12 @@ class Budget {
         if (subItem.startDate != null) {
           final startDate = DateTime.parse(subItem.startDate!);
           // Once items apply if their date falls within the salary range
-          return !startDate.isBefore(rangeStart) && !startDate.isAfter(rangeEnd);
+          return !startDate.isBefore(rangeStart) &&
+              !startDate.isAfter(rangeEnd);
         }
-        return false;
+        // Sub-items without a start date are treated as flexible/miscellaneous
+        // They apply to any month (user decides when to mark them as completed)
+        return true;
       } else if (subItem.frequency == 'weekly') {
         if (subItem.startDate != null) {
           final startDate = DateTime.parse(subItem.startDate!);
@@ -308,14 +305,16 @@ class Budget {
           }
           return true;
         }
-        return false;
+        // Weekly sub-items without start date apply to all months
+        return true;
       } else if (subItem.frequency == 'monthly') {
         if (subItem.startDate != null) {
           final startDate = DateTime.parse(subItem.startDate!);
           // Monthly items apply if their start date is not after the range end
           return !startDate.isAfter(rangeEnd);
         }
-        return false;
+        // Monthly sub-items without start date apply to all months
+        return true;
       }
 
       return false;
