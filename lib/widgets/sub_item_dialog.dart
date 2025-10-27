@@ -49,8 +49,38 @@ class _SubItemDialogState extends State<SubItemDialog> {
         }
       }
       _isCompleted = widget.subItem!.isCompleted;
+    } else {
+      // Set default name for new sub-items
+      _nameCtrl.text = _getDefaultSubItemName();
     }
     _amountCtrl.addListener(_formatAmount);
+  }
+
+  /// Generates a default sub-item name based on today's date
+  /// Format: "25th oct 25 misc" for October 25, 2025
+  String _getDefaultSubItemName() {
+    final now = DateTime.now();
+    final day = now.day;
+    final month = DateFormat('MMM').format(now).toLowerCase();
+    final year = now.year.toString().substring(2); // Last 2 digits of year
+
+    // Get ordinal suffix (st, nd, rd, th)
+    String getOrdinalSuffix(int day) {
+      if (day >= 11 && day <= 13) return 'th';
+      switch (day % 10) {
+        case 1:
+          return 'st';
+        case 2:
+          return 'nd';
+        case 3:
+          return 'rd';
+        default:
+          return 'th';
+      }
+    }
+
+    final suffix = getOrdinalSuffix(day);
+    return '$day$suffix $month $year misc';
   }
 
   @override
