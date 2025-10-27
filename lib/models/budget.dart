@@ -116,15 +116,17 @@ class Budget {
     // Sum deductions only for checked items
     double total = 0.0;
     for (final it in applicable) {
-      // Only deduct if this item is checked
-      if (monthChecks[it.id] == true) {
-        // Calculate the effective deduction considering sub-items
-        final baseDeduction = _deductionForItemInMonth(it, monthKey);
+      // For items with sub-items, calculate deductions based on checked sub-items
+      // even if the parent item is not checked
+      if (it.hasSubItems && it.subItems.isNotEmpty) {
         final subItemsTotal = subItemTotalForMonthInChecklist(it.id, monthKey);
-
-        // If sub-items total exceeds the base deduction, use the sub-items total
-        // as the effective deduction for this item
-        total += subItemsTotal > 0 ? subItemsTotal : baseDeduction;
+        total += subItemsTotal;
+      } else {
+        // Only deduct if this item is checked (for items without sub-items)
+        if (monthChecks[it.id] == true) {
+          final baseDeduction = _deductionForItemInMonth(it, monthKey);
+          total += baseDeduction;
+        }
       }
     }
     return total;
@@ -135,89 +137,62 @@ class Budget {
     final amt = monthItemAmountOverrides[monthKey]?[it.id] ?? it.amount ?? 0.0;
     // Date override (if any) for this item in this month
     final overrideForThisMonth = monthItemOverrides[monthKey]?[it.id];
-    if (it.frequency == 'monthly') {
-      // If an override date exists for this month, use it to determine applicability
-      if (overrideForThisMonth != null) {
-        try {
-          final sd = DateTime.parse(overrideForThisMonth);
-          final keyDate = DateTime(
-            int.parse(monthKey.split('-')[0]),
-            int.parse(monthKey.split('-')[1]),
-            1,
-          );
-          final lastDay = DateTime(
-            keyDate.year,
-            keyDate.month + 1,
-            1,
-          ).subtract(const Duration(days: 1));
-          if (!sd.isAfter(lastDay)) return amt;
-        } catch (_) {
-          return amt;
-        }
-        return 0.0;
+
+    try {
+      final parts = monthKey.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+
+      // Calculate the salary date range for this month
+      final thisMonthSalary = salaryDateForMonth(monthKey);
+      DateTime rangeStart = thisMonthSalary;
+
+      final nextDate = DateTime(year, month + 1, 1);
+      final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+      final keys = monthKeys();
+      DateTime rangeEnd;
+
+      final isLast = keys.isNotEmpty && monthKey == keys.last;
+      if (isLast) {
+        rangeEnd = end;
+      } else {
+        final nextSalary = salaryDateForMonth(nextKey);
+        rangeEnd = nextSalary.subtract(const Duration(days: 1));
       }
-      // Otherwise fall back to item's startDate logic
-      if (it.startDate == null) return amt;
-      try {
-        final sd = DateTime.parse(it.startDate!);
-        final keyDate = DateTime(
-          int.parse(monthKey.split('-')[0]),
-          int.parse(monthKey.split('-')[1]),
-          1,
-        );
-        final lastDay = DateTime(
-          keyDate.year,
-          keyDate.month + 1,
-          1,
-        ).subtract(const Duration(days: 1));
-        if (!sd.isAfter(lastDay)) return amt;
-      } catch (_) {
-        return amt;
-      }
-      return 0.0;
-    } else if (it.frequency == 'weekly') {
-      // Count number of weekly occurrences within the month for the recurring weekly amount
-      // allow override to act as the effective start date for this month
-      final weeklySdStr = overrideForThisMonth ?? it.startDate;
-      if (weeklySdStr == null) return 0.0;
-      try {
+
+      if (it.frequency == 'monthly') {
+        // Use override date if available, otherwise use item's start date
+        final dateToCheck = overrideForThisMonth ?? it.startDate;
+        if (dateToCheck == null) return amt;
+        final sd = DateTime.parse(dateToCheck);
+        // Monthly items apply if their start date is not after the range end
+        return !sd.isAfter(rangeEnd) ? amt : 0.0;
+      } else if (it.frequency == 'weekly') {
+        // Use override date if available, otherwise use item's start date
+        final weeklySdStr = overrideForThisMonth ?? it.startDate;
+        if (weeklySdStr == null) return 0.0;
         final sd = DateTime.parse(weeklySdStr);
-        final parts = monthKey.split('-');
-        final firstDay = DateTime(int.parse(parts[0]), int.parse(parts[1]), 1);
-        final lastDay = DateTime(
-          firstDay.year,
-          firstDay.month + 1,
-          1,
-        ).subtract(const Duration(days: 1));
-        if (sd.isAfter(lastDay)) return 0.0;
-        // Find first occurrence >= firstDay
-        int offsetDays = firstDay.difference(sd).inDays;
+        if (sd.isAfter(rangeEnd)) return 0.0;
+        // Find first occurrence >= rangeStart
+        int offsetDays = rangeStart.difference(sd).inDays;
         int weeksOffset = 0;
         if (offsetDays > 0) {
           weeksOffset = (offsetDays + 6) ~/ 7;
         }
         DateTime firstOcc = sd.add(Duration(days: weeksOffset * 7));
-        if (firstOcc.isAfter(lastDay)) return 0.0;
-        final remainingDays = lastDay.difference(firstOcc).inDays;
+        if (firstOcc.isAfter(rangeEnd)) return 0.0;
+        final remainingDays = rangeEnd.difference(firstOcc).inDays;
         final occurrences = 1 + (remainingDays ~/ 7);
         return amt * occurrences;
-      } catch (_) {
-        return 0.0;
-      }
-    } else {
-      // once
-      // If an override exists for this month, treat that as the one-time date
-      final onceSdStr = overrideForThisMonth ?? it.startDate;
-      if (onceSdStr == null) return 0.0;
-      try {
+      } else {
+        // once - check if the date falls within the salary range for this month
+        final onceSdStr = overrideForThisMonth ?? it.startDate;
+        if (onceSdStr == null) return 0.0;
         final sd = DateTime.parse(onceSdStr);
-        final parts = monthKey.split('-');
-        if (sd.year == int.parse(parts[0]) && sd.month == int.parse(parts[1])) {
-          return amt;
-        }
-      } catch (_) {
-        return 0.0;
+        // Item applies if its date is within the salary date range
+        return (!sd.isBefore(rangeStart) && !sd.isAfter(rangeEnd)) ? amt : 0.0;
       }
+    } catch (_) {
       return 0.0;
     }
   }
@@ -281,86 +256,70 @@ class Budget {
   }
 
   /// Determine if a sub-item is applicable in a specific month based on its frequency and start date
+  /// Uses salary date range logic to match parent item behavior
   bool _isSubItemApplicableInMonth(SubItem subItem, String monthKey) {
     try {
       final parts = monthKey.split('-');
-      final targetYear = int.parse(parts[0]);
-      final targetMonth = int.parse(parts[1]);
-      final targetMonthStart = DateTime(targetYear, targetMonth, 1);
-      final targetMonthEnd = DateTime(
-        targetYear,
-        targetMonth + 1,
-        0,
-      ); // Last day of month
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
 
-      // For 'once' items, they should appear in the month specified by their start date (if available)
+      // Calculate the salary date range for this month
+      final thisMonthSalary = salaryDateForMonth(monthKey);
+      DateTime rangeStart = thisMonthSalary;
+
+      final nextDate = DateTime(year, month + 1, 1);
+      final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+      final keys = monthKeys();
+      DateTime rangeEnd;
+
+      final isLast = keys.isNotEmpty && monthKey == keys.last;
+      if (isLast) {
+        rangeEnd = end;
+      } else {
+        final nextSalary = salaryDateForMonth(nextKey);
+        rangeEnd = nextSalary.subtract(const Duration(days: 1));
+      }
+
       if (subItem.frequency == 'once') {
         if (subItem.startDate != null) {
-          try {
-            final startDate = DateTime.parse(subItem.startDate!);
-            return startDate.year == targetYear &&
-                startDate.month == targetMonth;
-          } catch (e) {
-            // If parsing fails, assume it's not applicable
-            return false;
-          }
+          final startDate = DateTime.parse(subItem.startDate!);
+          // Once items apply if their date falls within the salary range
+          return !startDate.isBefore(rangeStart) && !startDate.isAfter(rangeEnd);
         }
-        // If no start date, for backward compatibility with existing sub-items,
-        // they should appear in one specific month, not all months
-        // Let's return false to avoid showing in all months
         return false;
-      }
-      // For 'weekly' items, check if they have occurrences in this month
-      else if (subItem.frequency == 'weekly') {
+      } else if (subItem.frequency == 'weekly') {
         if (subItem.startDate != null) {
-          try {
-            final startDate = DateTime.parse(subItem.startDate!);
-            // Check if start date is before or during this month
-            if (startDate.isAfter(targetMonthEnd)) {
-              return false; // Start date is in the future
-            }
+          final startDate = DateTime.parse(subItem.startDate!);
+          if (startDate.isAfter(rangeEnd)) {
+            return false; // Start date is after the range
+          }
 
-            // Find first occurrence >= start of month
-            int offsetDays = targetMonthStart.difference(startDate).inDays;
-            int weeksOffset = 0;
-            if (offsetDays > 0) {
-              weeksOffset = (offsetDays + 6) ~/ 7; // Round up to next week
-            }
-            DateTime firstOcc = startDate.add(Duration(days: weeksOffset * 7));
+          // Find first occurrence >= rangeStart
+          int offsetDays = rangeStart.difference(startDate).inDays;
+          int weeksOffset = 0;
+          if (offsetDays > 0) {
+            weeksOffset = (offsetDays + 6) ~/ 7;
+          }
+          DateTime firstOcc = startDate.add(Duration(days: weeksOffset * 7));
 
-            // Check if any occurrence falls within the target month
-            if (firstOcc.isAfter(targetMonthEnd)) {
-              return false;
-            }
-            return true;
-          } catch (e) {
-            // If parsing fails, assume it's not applicable
+          // Check if any occurrence falls within the range
+          if (firstOcc.isAfter(rangeEnd)) {
             return false;
           }
+          return true;
         }
-        // If no start date, default to false
         return false;
-      }
-      // For 'monthly' items, they apply to each month on or after their start date
-      else if (subItem.frequency == 'monthly') {
+      } else if (subItem.frequency == 'monthly') {
         if (subItem.startDate != null) {
-          try {
-            final startDate = DateTime.parse(subItem.startDate!);
-            // Check if the start date is before or during this month
-            return !startDate.isAfter(targetMonthEnd);
-          } catch (e) {
-            // If parsing fails, assume it's not applicable
-            return false;
-          }
+          final startDate = DateTime.parse(subItem.startDate!);
+          // Monthly items apply if their start date is not after the range end
+          return !startDate.isAfter(rangeEnd);
         }
-        // If no start date, default to false
         return false;
       }
 
-      // Default behavior for any other frequency
       return false;
     } catch (e) {
-      // If there's an error parsing the date, assume the sub-item is not applicable
       return false;
     }
   }
@@ -378,13 +337,15 @@ class Budget {
     final monthChecklist = checklist[monthKey] ?? {};
 
     for (final subItem in budgetItem.subItems) {
+      // Only include sub-items that are applicable in this month based on frequency
+      if (!_isSubItemApplicableInMonth(subItem, monthKey)) {
+        continue;
+      }
+
       // Only count sub-items that are marked as completed/checked
       final checklistKey = 'subitem_${itemId}_${subItem.id}';
       if (monthChecklist.containsKey(checklistKey) &&
           monthChecklist[checklistKey] == true) {
-        total += subItem.amount;
-      } else if (subItem.isCompleted) {
-        // If the sub-item is marked as completed in the data
         total += subItem.amount;
       }
     }
@@ -416,13 +377,15 @@ class Budget {
     final monthChecklist = checklist[monthKey] ?? {};
 
     for (final subItem in budgetItem.subItems) {
+      // Only include sub-items that are applicable in this month based on frequency
+      if (!_isSubItemApplicableInMonth(subItem, monthKey)) {
+        continue;
+      }
+
       // Check if this sub-item is marked as completed in the checklist
       // Use the naming convention: subitem_itemId_subItemId
       final checklistKey = 'subitem_${itemId}_${subItem.id}';
       if (monthChecklist[checklistKey] == true) {
-        total += subItem.amount;
-      } else if (subItem.isCompleted) {
-        // Also consider sub-items marked as completed in the sub-item data
         total += subItem.amount;
       }
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/sub_item.dart';
+import '../models/budget.dart';
 import '../widgets/app_theme.dart';
 
 class SubItemsList extends StatefulWidget {
@@ -14,6 +15,7 @@ class SubItemsList extends StatefulWidget {
   final Map<String, bool>? checklist; // Added checklist parameter
   final String? parentStartDate;
   final bool hasSubItems;
+  final Budget budget; // Added budget to access salary date calculation
 
   const SubItemsList({
     super.key,
@@ -27,6 +29,7 @@ class SubItemsList extends StatefulWidget {
     this.checklist,
     this.parentStartDate,
     this.hasSubItems = true,
+    required this.budget,
   });
 
   @override
@@ -37,15 +40,29 @@ class _SubItemsListState extends State<SubItemsList> {
   bool _isExpanded = true;
 
   // Check if a sub-item applies to the current month based on frequency
+  // Uses salary date range logic to match budget deduction calculation
   bool _subItemAppliesInMonth(SubItem subItem, String monthKey) {
     try {
       final parts = monthKey.split('-');
-      final firstDay = DateTime(int.parse(parts[0]), int.parse(parts[1]), 1);
-      final lastDay = DateTime(
-        firstDay.year,
-        firstDay.month + 1,
-        1,
-      ).subtract(const Duration(days: 1));
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+
+      // Calculate the salary date range for this month using the budget
+      final thisMonthSalary = widget.budget.salaryDateForMonth(monthKey);
+      DateTime rangeStart = thisMonthSalary;
+
+      final nextDate = DateTime(year, month + 1, 1);
+      final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+      final keys = widget.budget.monthKeys();
+      DateTime rangeEnd;
+
+      final isLast = keys.isNotEmpty && monthKey == keys.last;
+      if (isLast) {
+        rangeEnd = widget.budget.end;
+      } else {
+        final nextSalary = widget.budget.salaryDateForMonth(nextKey);
+        rangeEnd = nextSalary.subtract(const Duration(days: 1));
+      }
 
       // Get the effective start date for this sub-item (use parent start date as fallback)
       String? effectiveStartDate = subItem.startDate ?? widget.parentStartDate;
@@ -53,23 +70,24 @@ class _SubItemsListState extends State<SubItemsList> {
       if (subItem.frequency == 'monthly') {
         if (effectiveStartDate == null) return true;
         final sd = DateTime.parse(effectiveStartDate);
-        return !sd.isAfter(lastDay);
+        // Monthly items apply if their start date is not after the range end
+        return !sd.isAfter(rangeEnd);
       } else if (subItem.frequency == 'weekly') {
         if (effectiveStartDate == null) return false;
         final sd = DateTime.parse(effectiveStartDate);
-        if (sd.isAfter(lastDay)) return false;
-        // find first occurrence >= firstDay
-        int offsetDays = firstDay.difference(sd).inDays;
+        if (sd.isAfter(rangeEnd)) return false;
+        // Find first occurrence >= rangeStart
+        int offsetDays = rangeStart.difference(sd).inDays;
         int weeksOffset = 0;
         if (offsetDays > 0) weeksOffset = (offsetDays + 6) ~/ 7;
         DateTime firstOcc = sd.add(Duration(days: weeksOffset * 7));
-        if (firstOcc.isAfter(lastDay)) return false;
+        if (firstOcc.isAfter(rangeEnd)) return false;
         return true;
       } else {
-        // once
+        // once - check if the date falls within the salary range
         if (effectiveStartDate == null) return false;
         final sd = DateTime.parse(effectiveStartDate);
-        return sd.year == firstDay.year && sd.month == firstDay.month;
+        return !sd.isBefore(rangeStart) && !sd.isAfter(rangeEnd);
       }
     } catch (_) {
       return false;

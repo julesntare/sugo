@@ -5,8 +5,9 @@
 *.pyc
 *.swp
 .buildlog/
-.history
+.history/
 .github/
+.claude/
 
 
 

@@ -272,6 +272,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                       SubItemsList(
                         subItems: _item.subItems,
                         parentItemId: _item.id, // Pass the parent item ID
+                        budget: _budget, // Pass the budget for salary date calculations
                         onEdit: (subItem) async {
                           final updatedSubItem = await showSubItemDialog(
                             context,
@@ -367,6 +368,8 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                           if (itemIndex != -1) {
                             _budget.items[itemIndex] = _item;
                           }
+                          // Save the budget to persist checklist changes
+                          await Storage.updateBudget(_budget);
                           widget.onChanged?.call(_budget);
                         },
                         totalAmount: displayAmount,
