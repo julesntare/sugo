@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/budget.dart';
 import '../models/budget_item.dart';
-import '../models/sub_item.dart';
 import '../services/storage.dart';
 import '../widgets/sub_items_list.dart';
 import '../widgets/sub_item_dialog.dart';
@@ -272,7 +271,8 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                       SubItemsList(
                         subItems: _item.subItems,
                         parentItemId: _item.id, // Pass the parent item ID
-                        budget: _budget, // Pass the budget for salary date calculations
+                        budget:
+                            _budget, // Pass the budget for salary date calculations
                         onEdit: (subItem) async {
                           final result = await showSubItemDialog(
                             context,
@@ -383,105 +383,6 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   ],
                 );
               }),
-
-          if (_item.hasSubItems)
-            Column(
-              children: [
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[800],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Sub-items',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      if (_item.subItems.isEmpty)
-                        const Text(
-                          'No sub-items added yet',
-                          style: TextStyle(color: Colors.grey),
-                        )
-                      else
-                        ..._item.subItems.map(
-                          (subItem) => Card(
-                            color: Colors.grey[700],
-                            child: ListTile(
-                              title: Text(
-                                subItem.name,
-                                style: const TextStyle(color: Colors.white),
-                              ),
-                              subtitle: Text(
-                                '${NumberFormat('#,###').format(subItem.amount)} Rwf${subItem.description != null ? '\\n${subItem.description}' : ''}',
-                                style: const TextStyle(color: Colors.grey),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (subItem.isCompleted)
-                                    const Icon(
-                                      Icons.check_circle,
-                                      color: Colors.green,
-                                    ),
-                                  PopupMenuButton(
-                                    icon: const Icon(Icons.more_vert),
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(
-                                        value: 'edit',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.edit, size: 18),
-                                            SizedBox(width: 8),
-                                            Text('Edit'),
-                                          ],
-                                        ),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'delete',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.delete,
-                                              size: 18,
-                                              color: Colors.red,
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text(
-                                              'Delete',
-                                              style: TextStyle(
-                                                color: Colors.red,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                    onSelected: (value) {
-                                      if (value == 'edit') {
-                                        _editSubItem(subItem);
-                                      } else if (value == 'delete') {
-                                        _deleteSubItem(subItem);
-                                      }
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
         ],
       ),
       floatingActionButton: _item.hasSubItems
@@ -525,63 +426,6 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       await Storage.addSubItem(_item.id, result.subItem);
       // Save the budget to persist checklist changes
       await Storage.updateBudget(_budget);
-      // Update budget item in the main budget
-      final itemIndex = _budget.items.indexWhere((item) => item.id == _item.id);
-      if (itemIndex != -1) {
-        _budget.items[itemIndex] = _item;
-      }
-      widget.onChanged?.call(_budget);
-    }
-  }
-
-  Future<void> _editSubItem(SubItem subItem) async {
-    final result = await showSubItemDialog(
-      context,
-      subItem: subItem,
-      maxAmount: _item.amount,
-    );
-    if (result != null) {
-      setState(() {
-        final index = _item.subItems.indexWhere((s) => s.id == subItem.id);
-        if (index != -1) {
-          _item.subItems[index] = result.subItem;
-        }
-      });
-      await Storage.updateSubItem(result.subItem);
-      // Update budget item in the main budget
-      final itemIndex = _budget.items.indexWhere((item) => item.id == _item.id);
-      if (itemIndex != -1) {
-        _budget.items[itemIndex] = _item;
-      }
-      widget.onChanged?.call(_budget);
-    }
-  }
-
-  Future<void> _deleteSubItem(SubItem subItem) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Sub-item'),
-        content: Text('Are you sure you want to delete "${subItem.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('DELETE'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      setState(() {
-        _item.subItems.removeWhere((s) => s.id == subItem.id);
-      });
-      await Storage.deleteSubItem(subItem.id);
       // Update budget item in the main budget
       final itemIndex = _budget.items.indexWhere((item) => item.id == _item.id);
       if (itemIndex != -1) {
