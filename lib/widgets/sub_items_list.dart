@@ -112,13 +112,9 @@ class _SubItemsListState extends State<SubItemsList> {
     // Get filtered sub-items that apply to this month
     final filteredSubItems = _getFilteredSubItems();
 
-    final totalSubItemsAmount = filteredSubItems.fold(
-      0.0,
-      (sum, subItem) => sum + subItem.amount,
-    );
-    // Calculate completed sub-items amount using the monthly checklist
+    // Calculate used amount (completed sub-items) using the monthly checklist
     // Only count sub-items that apply to this specific month
-    final completedSubItemsAmount = filteredSubItems
+    final usedAmount = filteredSubItems
         .where((subItem) {
           // Check if this specific sub-item is marked as completed in this month
           // Use the pattern: subitem_${parentItemId}_${subItem.id}
@@ -128,8 +124,9 @@ class _SubItemsListState extends State<SubItemsList> {
               widget.checklist![checklistKey] == true;
         })
         .fold(0.0, (sum, subItem) => sum + subItem.amount);
+    final remainingAmount = widget.totalAmount - usedAmount;
     final progressPercentage = widget.totalAmount > 0
-        ? (completedSubItemsAmount / widget.totalAmount) * 100
+        ? (usedAmount / widget.totalAmount) * 100
         : 0;
 
     Color getProgressColor() {
@@ -191,11 +188,10 @@ class _SubItemsListState extends State<SubItemsList> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Usage:'),
+                          const Text('Budget:'),
                           Text(
-                            '${NumberFormat('#,###').format(completedSubItemsAmount)} / ${NumberFormat('#,###').format(widget.totalAmount)} Rwf',
-                            style: TextStyle(
-                              color: getProgressColor(),
+                            '${NumberFormat('#,###').format(widget.totalAmount)} Rwf',
+                            style: const TextStyle(
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -217,12 +213,19 @@ class _SubItemsListState extends State<SubItemsList> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Total: ${NumberFormat('#,###').format(totalSubItemsAmount)} Rwf',
-                            style: const TextStyle(fontSize: 12),
+                            'Used: ${NumberFormat('#,###').format(usedAmount)} Rwf',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: getProgressColor(),
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           Text(
-                            'Completed: ${NumberFormat('#,###').format(completedSubItemsAmount)} Rwf',
-                            style: const TextStyle(fontSize: 12),
+                            'Remaining: ${NumberFormat('#,###').format(remainingAmount)} Rwf',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ],
                       ),

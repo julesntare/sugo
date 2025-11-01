@@ -40,6 +40,7 @@ class BudgetCard extends StatelessWidget {
     }
 
     final remaining = budget.remainingUpTo(keyForRemaining);
+    final used = budget.amount - remaining;
     final percentage = budget.amount > 0
         ? (remaining / budget.amount) * 100
         : 0;
@@ -206,10 +207,10 @@ class BudgetCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _buildStatColumn(
-                          'Budget',
-                          '${fmt.format(budget.amount)} Rwf',
-                          Icons.account_balance_wallet_outlined,
-                          AppColors.deepPurple,
+                          'Used',
+                          '${fmt.format(used)} Rwf',
+                          Icons.shopping_cart_outlined,
+                          Colors.orange,
                         ),
                       ),
                       Container(width: 1, height: 40, color: Colors.grey[300]),
