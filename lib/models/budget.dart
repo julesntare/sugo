@@ -485,6 +485,61 @@ class Budget {
     return monthlySalary - deductions;
   }
 
+  /// Find the current active month key based on today's date and salary ranges
+  /// Returns the month key whose salary range contains today's date
+  /// If today is before the budget starts, returns the first month
+  /// If today is after the budget ends, returns the last month
+  String currentActiveMonthKey() {
+    final now = DateTime.now();
+    final keys = monthKeys();
+
+    if (keys.isEmpty) return DateFormat('yyyy-MM').format(now);
+
+    // If we're before the budget starts, return first month
+    if (now.isBefore(start)) return keys.first;
+
+    // If we're after the budget ends, return last month
+    if (now.isAfter(end)) return keys.last;
+
+    // Find which month range contains today
+    for (int i = 0; i < keys.length; i++) {
+      final monthKey = keys[i];
+      final parts = monthKey.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+
+      // Get the salary date range for this month
+      final thisMonthSalary = salaryDateForMonth(monthKey);
+      DateTime rangeStart = thisMonthSalary;
+
+      // For the first month, use budget start if it's after salary date
+      if (i == 0 && start.isAfter(thisMonthSalary)) {
+        rangeStart = start;
+      }
+
+      // Calculate range end
+      final isLast = i == keys.length - 1;
+      DateTime rangeEnd;
+
+      if (isLast) {
+        rangeEnd = end;
+      } else {
+        final nextDate = DateTime(year, month + 1, 1);
+        final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+        final nextSalary = salaryDateForMonth(nextKey);
+        rangeEnd = nextSalary.subtract(const Duration(days: 1));
+      }
+
+      // Check if today falls within this range (inclusive)
+      if (!now.isBefore(rangeStart) && !now.isAfter(rangeEnd)) {
+        return monthKey;
+      }
+    }
+
+    // Fallback: return the month key based on calendar month
+    return DateFormat('yyyy-MM').format(now);
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,

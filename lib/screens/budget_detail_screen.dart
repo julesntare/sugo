@@ -441,9 +441,9 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
       );
     }
 
-    // Find current month index
-    final nowKey = DateFormat('yyyy-MM').format(DateTime.now());
-    int initialPage = months.indexOf(nowKey);
+    // Find current active month based on salary date ranges
+    final activeMonthKey = _budget.currentActiveMonthKey();
+    int initialPage = months.indexOf(activeMonthKey);
     if (initialPage == -1) {
       initialPage = 0;
     }
