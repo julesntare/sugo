@@ -12,6 +12,9 @@ class Budget {
   /// per-month checklist state: key YYYY-MM -> itemId -> checked
   final Map<String, Map<String, bool>> checklist;
 
+  /// per-month completion dates: key YYYY-MM -> itemId -> ISO date (yyyy-MM-dd) when marked as completed
+  final Map<String, Map<String, String>> completionDates;
+
   /// Optional per-month explicit salary date overrides: key YYYY-MM -> ISO date (yyyy-MM-dd)
   /// If present, this exact date is used as the salary/payment date for that month.
   final Map<String, String> monthSalaryOverrides;
@@ -30,11 +33,13 @@ class Budget {
     required this.end,
     List<BudgetItem>? items,
     Map<String, Map<String, bool>>? checklist,
+    Map<String, Map<String, String>>? completionDates,
     Map<String, String>? monthSalaryOverrides,
     Map<String, Map<String, String>>? monthItemOverridesParam,
     Map<String, Map<String, double>>? monthItemAmountOverridesParam,
   }) : items = List<BudgetItem>.from(items ?? <BudgetItem>[]),
        checklist = checklist ?? {},
+       completionDates = completionDates ?? {},
        monthSalaryOverrides = monthSalaryOverrides ?? {},
        monthItemOverrides = monthItemOverridesParam ?? {},
        monthItemAmountOverrides = monthItemAmountOverridesParam ?? {};
@@ -548,6 +553,7 @@ class Budget {
     'end': end.toIso8601String(),
     'items': items.map((e) => e.toJson()).toList(),
     'checklist': checklist,
+    'completionDates': completionDates,
     'monthSalaryOverrides': monthSalaryOverrides,
     'monthItemOverrides': monthItemOverrides,
     'monthItemAmountOverrides': monthItemAmountOverrides,
@@ -568,6 +574,15 @@ class Budget {
       checklist: (json['checklist'] as Map<String, dynamic>?)?.map(
         (k, v) => MapEntry(k, Map<String, bool>.from(v as Map)),
       ),
+      completionDates:
+          (json['completionDates'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(
+              k,
+              (v as Map<String, dynamic>).map(
+                (ik, iv) => MapEntry(ik, iv as String),
+              ),
+            ),
+          ),
       monthSalaryOverrides:
           (json['monthSalaryOverrides'] as Map<String, dynamic>?)?.map(
             (k, v) => MapEntry(k, v as String),

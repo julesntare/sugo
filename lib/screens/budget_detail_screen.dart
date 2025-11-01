@@ -361,8 +361,6 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                   final checked = monthChecks[it.id] == true;
                   // Get the actual amount for this month (considering overrides)
                   final actualAmount = _budget.monthItemAmountOverrides[key]?[it.id] ?? it.amount ?? 0;
-                  // Get the effective start date (override or original)
-                  final effectiveStartDate = _budget.monthItemOverrides[key]?[it.id] ?? it.startDate;
 
                   // Build frequency label
                   String frequencyLabel = '';
@@ -374,14 +372,21 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     frequencyLabel = 'One-time: ${fmt.format(actualAmount)} Rwf';
                   }
 
+                  // Get the salary range start date for this month
+                  final rangeStartDate = _budget.salaryDateForMonth(key);
+                  final rangeStartDateStr = DateFormat('yyyy-MM-dd').format(rangeStartDate);
+
+                  // Get completion date if item is checked
+                  final completionDate = _budget.completionDates[key]?[it.id];
+
                   // Add start date if item has not started yet
-                  if (effectiveStartDate != null && !checked) {
-                    frequencyLabel += '\nStart: $effectiveStartDate';
+                  if (!checked) {
+                    frequencyLabel += '\nStart: $rangeStartDateStr';
                   }
 
                   // Add "Started" date if item is marked as completed
-                  if (effectiveStartDate != null && checked) {
-                    frequencyLabel += '\nStarted: $effectiveStartDate';
+                  if (checked && completionDate != null) {
+                    frequencyLabel += '\nStarted: $completionDate';
                   }
 
                   return ListTile(
@@ -396,13 +401,56 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     trailing: Checkbox(
                       value: checked,
                       onChanged: (v) async {
-                        setState(() {
-                          final map = _budget.checklist[key] ?? {};
-                          map[it.id] = v == true;
-                          _budget.checklist[key] = map;
-                        });
-                        await Storage.updateBudget(_budget);
-                        widget.onChanged?.call(_budget);
+                        if (v == true) {
+                          // Show date picker when marking as completed
+                          final now = DateTime.now();
+                          // Ensure initialDate is within the valid range
+                          final initialDate = now.isBefore(rangeStartDate)
+                            ? rangeStartDate
+                            : now;
+
+                          final selectedDate = await showDatePicker(
+                            context: context,
+                            initialDate: initialDate,
+                            firstDate: rangeStartDate,
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                            helpText: 'Select completion date',
+                          );
+
+                          if (selectedDate != null) {
+                            setState(() {
+                              // Mark as checked
+                              final checkMap = _budget.checklist[key] ?? {};
+                              checkMap[it.id] = true;
+                              _budget.checklist[key] = checkMap;
+
+                              // Record completion date
+                              final dateMap = _budget.completionDates[key] ?? {};
+                              dateMap[it.id] = DateFormat('yyyy-MM-dd').format(selectedDate);
+                              _budget.completionDates[key] = dateMap;
+                            });
+                            await Storage.updateBudget(_budget);
+                            widget.onChanged?.call(_budget);
+                          }
+                        } else {
+                          // Unchecking - remove completion date
+                          setState(() {
+                            final checkMap = _budget.checklist[key] ?? {};
+                            checkMap[it.id] = false;
+                            _budget.checklist[key] = checkMap;
+
+                            // Remove completion date
+                            final dateMap = _budget.completionDates[key] ?? {};
+                            dateMap.remove(it.id);
+                            if (dateMap.isNotEmpty) {
+                              _budget.completionDates[key] = dateMap;
+                            } else {
+                              _budget.completionDates.remove(key);
+                            }
+                          });
+                          await Storage.updateBudget(_budget);
+                          widget.onChanged?.call(_budget);
+                        }
                       },
                     ),
                     onTap: () => Navigator.of(context).push(
