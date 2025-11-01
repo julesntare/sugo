@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/budget.dart';
 import '../models/budget_item.dart';
+import '../models/sub_item.dart';
 import '../services/storage.dart';
 import '../widgets/app_theme.dart';
 import 'item_detail_screen.dart';
@@ -235,6 +236,60 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
     );
   }
 
+  bool _subItemAppliesInMonth(
+    SubItem subItem,
+    String monthKey,
+    BudgetItem parentItem,
+  ) {
+    try {
+      final parts = monthKey.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+
+      final thisMonthSalary = _budget.salaryDateForMonth(monthKey);
+      DateTime rangeStart = thisMonthSalary;
+
+      final nextDate = DateTime(year, month + 1, 1);
+      final nextKey =
+          '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+      final keys = _budget.monthKeys();
+      DateTime rangeEnd;
+
+      final isLast = keys.isNotEmpty && monthKey == keys.last;
+      if (isLast) {
+        rangeEnd = _budget.end;
+      } else {
+        final nextSalary = _budget.salaryDateForMonth(nextKey);
+        rangeEnd = nextSalary.subtract(const Duration(days: 1));
+      }
+
+      // Get the effective start date for this sub-item (use parent start date as fallback)
+      String? effectiveStartDate = subItem.startDate ?? parentItem.startDate;
+
+      if (subItem.frequency == 'monthly') {
+        if (effectiveStartDate == null) return true;
+        final sd = DateTime.parse(effectiveStartDate);
+        return !sd.isAfter(rangeEnd);
+      } else if (subItem.frequency == 'weekly') {
+        if (effectiveStartDate == null) return false;
+        final sd = DateTime.parse(effectiveStartDate);
+        if (sd.isAfter(rangeEnd)) return false;
+        int offsetDays = rangeStart.difference(sd).inDays;
+        int weeksOffset = 0;
+        if (offsetDays > 0) weeksOffset = (offsetDays + 6) ~/ 7;
+        DateTime firstOcc = sd.add(Duration(days: weeksOffset * 7));
+        if (firstOcc.isAfter(rangeEnd)) return false;
+        return true;
+      } else {
+        if (effectiveStartDate == null) return false;
+        final sd = DateTime.parse(effectiveStartDate);
+        return !sd.isBefore(rangeStart) && !sd.isAfter(rangeEnd);
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+
   Widget _buildMonthCard(String key, NumberFormat fmt) {
     bool itemAppliesInMonth(BudgetItem it, String monthKey) {
       try {
@@ -358,9 +413,53 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                 Text('No items', style: TextStyle(color: AppColors.lightGrey))
               else
                 ...monthItems.map((it) {
-                  final checked = monthChecks[it.id] == true;
+                  final explicitlyChecked = monthChecks[it.id] == true;
                   // Get the actual amount for this month (considering overrides)
-                  final actualAmount = _budget.monthItemAmountOverrides[key]?[it.id] ?? it.amount ?? 0;
+                  final actualAmount =
+                      _budget.monthItemAmountOverrides[key]?[it.id] ??
+                      it.amount ??
+                      0;
+
+                  // Check for sub-items completion status
+                  bool isAutoChecked = false;
+                  bool isBudgetExceeded = false;
+                  double completedSubItemsTotal = 0.0;
+
+                  if (it.hasSubItems) {
+                    // Get sub-items that apply to this month
+                    final applicableSubItems = it.subItems.where((subItem) {
+                      return _subItemAppliesInMonth(subItem, key, it);
+                    }).toList();
+
+                    if (applicableSubItems.isNotEmpty) {
+                      // Count completed sub-items and their total amount
+                      final completedSubItems = applicableSubItems.where((
+                        subItem,
+                      ) {
+                        final checklistKey = 'subitem_${it.id}_${subItem.id}';
+                        return monthChecks[checklistKey] == true;
+                      }).toList();
+
+                      final completedCount = completedSubItems.length;
+
+                      // Calculate total amount of completed sub-items
+                      completedSubItemsTotal = completedSubItems.fold(
+                        0.0,
+                        (sum, subItem) => sum + subItem.amount,
+                      );
+
+                      // Check if budget is exceeded
+                      isBudgetExceeded = completedSubItemsTotal > actualAmount;
+
+                      // Check if any sub-items are completed
+                      if (completedCount > 0) {
+                        // Auto-check if not explicitly checked and has any completed sub-items
+                        isAutoChecked = !explicitlyChecked;
+                      }
+                    }
+                  }
+
+                  final checked = explicitlyChecked || isAutoChecked;
 
                   // Build frequency label
                   String frequencyLabel = '';
@@ -369,12 +468,15 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                   } else if (it.frequency == 'weekly') {
                     frequencyLabel = 'Weekly: ${fmt.format(actualAmount)} Rwf';
                   } else if (it.frequency == 'once') {
-                    frequencyLabel = 'One-time: ${fmt.format(actualAmount)} Rwf';
+                    frequencyLabel =
+                        'One-time: ${fmt.format(actualAmount)} Rwf';
                   }
 
                   // Get the salary range start date for this month
                   final rangeStartDate = _budget.salaryDateForMonth(key);
-                  final rangeStartDateStr = DateFormat('yyyy-MM-dd').format(rangeStartDate);
+                  final rangeStartDateStr = DateFormat(
+                    'yyyy-MM-dd',
+                  ).format(rangeStartDate);
 
                   // Get completion date if item is checked
                   final completionDate = _budget.completionDates[key]?[it.id];
@@ -400,56 +502,88 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     ),
                     trailing: Checkbox(
                       value: checked,
+                      fillColor: WidgetStateProperty.resolveWith<Color>((
+                        states,
+                      ) {
+                        if (explicitlyChecked) {
+                          // Explicitly checked - use primary color
+                          return Theme.of(context).colorScheme.primary;
+                        }
+                        if (isAutoChecked) {
+                          // Auto-checked from sub-items
+                          if (isBudgetExceeded) {
+                            // Budget exceeded - use danger/red color
+                            return AppColors.danger;
+                          }
+                          // Has completed sub-items, budget not exceeded - use warning/orange color
+                          // This persists until next monthly range starts
+                          return AppColors.warning;
+                        }
+                        // Unchecked - transparent
+                        return Colors.transparent;
+                      }),
+                      checkColor: Colors.white,
                       onChanged: (v) async {
                         if (v == true) {
+                          // If clicking to check (from unchecked or partial state)
                           // Show date picker when marking as completed
                           final now = DateTime.now();
                           // Ensure initialDate is within the valid range
                           final initialDate = now.isBefore(rangeStartDate)
-                            ? rangeStartDate
-                            : now;
+                              ? rangeStartDate
+                              : now;
 
                           final selectedDate = await showDatePicker(
                             context: context,
                             initialDate: initialDate,
                             firstDate: rangeStartDate,
-                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 365),
+                            ),
                             helpText: 'Select completion date',
                           );
 
                           if (selectedDate != null) {
                             setState(() {
-                              // Mark as checked
+                              // Mark as explicitly checked
                               final checkMap = _budget.checklist[key] ?? {};
                               checkMap[it.id] = true;
                               _budget.checklist[key] = checkMap;
 
                               // Record completion date
-                              final dateMap = _budget.completionDates[key] ?? {};
-                              dateMap[it.id] = DateFormat('yyyy-MM-dd').format(selectedDate);
+                              final dateMap =
+                                  _budget.completionDates[key] ?? {};
+                              dateMap[it.id] = DateFormat(
+                                'yyyy-MM-dd',
+                              ).format(selectedDate);
                               _budget.completionDates[key] = dateMap;
                             });
                             await Storage.updateBudget(_budget);
                             widget.onChanged?.call(_budget);
                           }
                         } else {
-                          // Unchecking - remove completion date
-                          setState(() {
-                            final checkMap = _budget.checklist[key] ?? {};
-                            checkMap[it.id] = false;
-                            _budget.checklist[key] = checkMap;
+                          // Unchecking - only uncheck if it was explicitly checked
+                          // If it's only partially checked (from sub-items), this does nothing
+                          if (explicitlyChecked) {
+                            setState(() {
+                              final checkMap = _budget.checklist[key] ?? {};
+                              checkMap[it.id] = false;
+                              _budget.checklist[key] = checkMap;
 
-                            // Remove completion date
-                            final dateMap = _budget.completionDates[key] ?? {};
-                            dateMap.remove(it.id);
-                            if (dateMap.isNotEmpty) {
-                              _budget.completionDates[key] = dateMap;
-                            } else {
-                              _budget.completionDates.remove(key);
-                            }
-                          });
-                          await Storage.updateBudget(_budget);
-                          widget.onChanged?.call(_budget);
+                              // Remove completion date
+                              final dateMap =
+                                  _budget.completionDates[key] ?? {};
+                              dateMap.remove(it.id);
+                              if (dateMap.isNotEmpty) {
+                                _budget.completionDates[key] = dateMap;
+                              } else {
+                                _budget.completionDates.remove(key);
+                              }
+                            });
+                            await Storage.updateBudget(_budget);
+                            widget.onChanged?.call(_budget);
+                          }
+                          // If only partially checked, user must go to sub-items to uncheck
                         }
                       },
                     ),

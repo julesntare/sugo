@@ -34,6 +34,10 @@ class AppColors {
     46,
   ); // ~8% on slate
 
+  // Warning/Alert colors
+  static const Color warning = Color(0xFFFFA726); // Orange for warning state
+  static const Color danger = Color(0xFFEF5350); // Red for danger/error state
+
   // Backwards compatibility aliases
   static const Color darkBlue = primary;
   static const Color blueAccent = primaryLight;

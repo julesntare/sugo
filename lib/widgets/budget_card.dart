@@ -209,7 +209,7 @@ class BudgetCard extends StatelessWidget {
                         child: _buildStatColumn(
                           'Used',
                           '${fmt.format(used)} Rwf',
-                          Icons.shopping_cart_outlined,
+                          Icons.trending_up,
                           Colors.orange,
                         ),
                       ),
