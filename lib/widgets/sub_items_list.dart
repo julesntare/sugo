@@ -144,111 +144,136 @@ class _SubItemsListState extends State<SubItemsList> {
     return Card(
       color: AppColors.cardGrey,
       margin: const EdgeInsets.symmetric(vertical: 8),
-      child: ExpansionTile(
-        initiallyExpanded: _isExpanded,
-        onExpansionChanged: (expanded) {
-          setState(() {
-            _isExpanded = expanded;
-          });
-        },
-        title: Row(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.subdirectory_arrow_right, size: 18),
-            const SizedBox(width: 8),
-            const Text(
-              'Sub-items',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: getProgressBackgroundColor(),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            '${progressPercentage.toStringAsFixed(1)}%',
-            style: TextStyle(
-              color: getProgressColor(),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+            // Header
+            Row(
               children: [
-                // Progress bar showing how much of the main item's amount is used
-                if (filteredSubItems.isNotEmpty)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Budget:'),
-                          Text(
-                            '${NumberFormat('#,###').format(widget.totalAmount)} Rwf',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      LinearProgressIndicator(
-                        value: progressPercentage > 100
-                            ? 1.0
-                            : progressPercentage / 100,
-                        minHeight: 8,
-                        backgroundColor: Colors.grey[300],
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          getProgressColor(),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Used: ${NumberFormat('#,###').format(usedAmount)} Rwf',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: getProgressColor(),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            'Remaining: ${NumberFormat('#,###').format(remainingAmount)} Rwf',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-
-                // Sub-items list
-                if (filteredSubItems.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      'No sub-items added yet',
-                      style: TextStyle(color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                  )
-                else
-                  _buildSubItemsList(),
+                const Icon(Icons.subdirectory_arrow_right, size: 18),
+                const SizedBox(width: 8),
+                const Text(
+                  'Sub-items',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+
+            // Progress bar showing how much of the main item's amount is used
+            if (filteredSubItems.isNotEmpty)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Budget:'),
+                      Text(
+                        '${NumberFormat('#,###').format(widget.totalAmount)} Rwf',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: progressPercentage > 100
+                        ? 1.0
+                        : progressPercentage / 100,
+                    minHeight: 8,
+                    backgroundColor: Colors.grey[300],
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      getProgressColor(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Used: ${NumberFormat('#,###').format(usedAmount)} Rwf',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: getProgressColor(),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        'Remaining: ${NumberFormat('#,###').format(remainingAmount)} Rwf',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: getProgressBackgroundColor(),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.percent,
+                          size: 16,
+                          color: getProgressColor(),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${progressPercentage.toStringAsFixed(1)}% used',
+                          style: TextStyle(
+                            color: getProgressColor(),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+
+            // Collapsible sub-items list
+            if (filteredSubItems.isNotEmpty)
+              ExpansionTile(
+                initiallyExpanded: _isExpanded,
+                onExpansionChanged: (expanded) {
+                  setState(() {
+                    _isExpanded = expanded;
+                  });
+                },
+                tilePadding: EdgeInsets.zero,
+                title: Text(
+                  'Items (${filteredSubItems.length})',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                children: [
+                  _buildSubItemsList(),
+                ],
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'No sub-items added yet',
+                  style: TextStyle(color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
