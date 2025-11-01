@@ -246,7 +246,8 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
         DateTime rangeStart = thisMonthSalary;
 
         final nextDate = DateTime(year, month + 1, 1);
-        final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+        final nextKey =
+            '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
         final keys = _budget.monthKeys();
         DateTime rangeEnd;
 
@@ -323,11 +324,8 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     tooltip: 'Edit salary date for this month',
                     icon: const Icon(Icons.edit, color: Colors.white),
                     onPressed: () async {
-                      final current =
-                          _budget.monthSalaryOverrides[key] != null
-                          ? DateTime.parse(
-                              _budget.monthSalaryOverrides[key]!,
-                            )
+                      final current = _budget.monthSalaryOverrides[key] != null
+                          ? DateTime.parse(_budget.monthSalaryOverrides[key]!)
                           : _budget.salaryDateForMonth(key);
                       final picked = await showDatePicker(
                         context: context,
@@ -351,35 +349,48 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
               const SizedBox(height: 6),
               Text(
                 'Salary: ${fmt.format(monthlySalary)} Rwf • Deductions: ${fmt.format(deductions)} Rwf • Remaining: ${fmt.format(remaining)} Rwf',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.lightGrey,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.lightGrey),
               ),
               const Divider(),
               if (monthItems.isEmpty)
-                Text(
-                  'No items',
-                  style: TextStyle(color: AppColors.lightGrey),
-                )
+                Text('No items', style: TextStyle(color: AppColors.lightGrey))
               else
                 ...monthItems.map((it) {
                   final checked = monthChecks[it.id] == true;
+                  // Get the actual amount for this month (considering overrides)
+                  final actualAmount = _budget.monthItemAmountOverrides[key]?[it.id] ?? it.amount ?? 0;
+                  // Get the effective start date (override or original)
+                  final effectiveStartDate = _budget.monthItemOverrides[key]?[it.id] ?? it.startDate;
+
+                  // Build frequency label
+                  String frequencyLabel = '';
+                  if (it.frequency == 'monthly') {
+                    frequencyLabel = 'Monthly: ${fmt.format(actualAmount)} Rwf';
+                  } else if (it.frequency == 'weekly') {
+                    frequencyLabel = 'Weekly: ${fmt.format(actualAmount)} Rwf';
+                  } else if (it.frequency == 'once') {
+                    frequencyLabel = 'One-time: ${fmt.format(actualAmount)} Rwf';
+                  }
+
+                  // Add start date if item has not started yet
+                  if (effectiveStartDate != null && !checked) {
+                    frequencyLabel += '\nStart: $effectiveStartDate';
+                  }
+
+                  // Add "Started" date if item is marked as completed
+                  if (effectiveStartDate != null && checked) {
+                    frequencyLabel += '\nStarted: $effectiveStartDate';
+                  }
+
                   return ListTile(
                     title: Text(
                       it.name,
                       style: const TextStyle(color: Colors.white),
                     ),
                     subtitle: Text(
-                      it.frequency == 'monthly'
-                          ? 'Monthly: ${fmt.format(it.amount ?? 0)} Rwf'
-                          : (it.frequency == 'weekly'
-                                    ? 'Weekly: ${fmt.format(it.amount ?? 0)} Rwf'
-                                    : (it.frequency == 'once'
-                                          ? 'One-time: ${fmt.format(it.amount ?? 0)} Rwf'
-                                          : '')) +
-                                (it.startDate != null
-                                    ? '\nStart: ${it.startDate}'
-                                    : ''),
+                      frequencyLabel,
                       style: TextStyle(color: AppColors.lightGrey),
                     ),
                     trailing: Checkbox(
@@ -426,9 +437,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
     if (months.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: Text(_budget.title)),
-        body: const Center(
-          child: Text('No valid months in this budget'),
-        ),
+        body: const Center(child: Text('No valid months in this budget')),
       );
     }
 
@@ -467,9 +476,9 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     children: [
                       Text(
                         'Budget items',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                        ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleLarge?.copyWith(color: Colors.white),
                       ),
                       Icon(
                         _isBudgetItemsExpanded
@@ -490,120 +499,123 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                   else
                     Column(
                       children: _budget.items.map((it) {
-                      String label = '';
-                      if (it.frequency == 'monthly') {
-                        label = 'Monthly: ${fmt.format(it.amount ?? 0)} Rwf';
-                      } else if (it.frequency == 'weekly') {
-                        label = 'Weekly: ${fmt.format(it.amount ?? 0)} Rwf';
-                      } else {
-                        label = 'One-time: ${fmt.format(it.amount ?? 0)} Rwf';
-                      }
-                      if (it.startDate != null) {
-                        label = '$label \n Start: ${it.startDate}';
-                      }
-                      return Dismissible(
-                        key: Key(it.id),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          color: Colors.red,
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 16),
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        confirmDismiss: (direction) async {
-                          return await showDialog<bool>(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Delete Item'),
-                                  content: Text(
-                                    'Are you sure you want to delete "${it.name}"?',
+                        String label = '';
+                        if (it.frequency == 'monthly') {
+                          label = 'Monthly: ${fmt.format(it.amount ?? 0)} Rwf';
+                        } else if (it.frequency == 'weekly') {
+                          label = 'Weekly: ${fmt.format(it.amount ?? 0)} Rwf';
+                        } else {
+                          label = 'One-time: ${fmt.format(it.amount ?? 0)} Rwf';
+                        }
+                        return Dismissible(
+                          key: Key(it.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            color: Colors.red,
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 16),
+                            child: const Icon(
+                              Icons.delete,
+                              color: Colors.white,
+                            ),
+                          ),
+                          confirmDismiss: (direction) async {
+                            return await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Delete Item'),
+                                    content: Text(
+                                      'Are you sure you want to delete "${it.name}"?',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(false),
+                                        child: const Text('CANCEL'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(true),
+                                        child: const Text('DELETE'),
+                                      ),
+                                    ],
                                   ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(false),
-                                      child: const Text('CANCEL'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(true),
-                                      child: const Text('DELETE'),
-                                    ),
-                                  ],
-                                ),
-                              ) ??
-                              false;
-                        },
-                        onDismissed: (direction) async {
-                          setState(() {
-                            _budget.items.removeWhere((item) => item.id == it.id);
-                          });
-                          await Storage.deleteBudgetItem(it.id);
-                          widget.onChanged?.call(_budget);
-                        },
-                        child: Card(
-                          color: AppColors.cardGrey,
-                          child: ListTile(
-                            title: Text(
-                              it.name,
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            subtitle: Text(
-                              label,
-                              style: TextStyle(color: AppColors.lightGrey),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit),
-                                  onPressed: () async {
-                                    DateTime? preferredDate;
-                                    if (it.startDate != null) {
-                                      try {
-                                        preferredDate = DateTime.parse(
-                                          it.startDate!,
-                                        );
-                                      } catch (_) {
-                                        preferredDate = null;
-                                      }
-                                    }
-
-                                    await showEditItemDialog(context, it, (
-                                      updatedItem,
-                                    ) {
-                                      setState(() {
-                                        final index = _budget.items.indexWhere(
-                                          (item) => item.id == it.id,
-                                        );
-                                        if (index != -1) {
-                                          _budget.items[index] = updatedItem;
+                                ) ??
+                                false;
+                          },
+                          onDismissed: (direction) async {
+                            setState(() {
+                              _budget.items.removeWhere(
+                                (item) => item.id == it.id,
+                              );
+                            });
+                            await Storage.deleteBudgetItem(it.id);
+                            widget.onChanged?.call(_budget);
+                          },
+                          child: Card(
+                            color: AppColors.cardGrey,
+                            child: ListTile(
+                              title: Text(
+                                it.name,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                              subtitle: Text(
+                                label,
+                                style: TextStyle(color: AppColors.lightGrey),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit),
+                                    onPressed: () async {
+                                      DateTime? preferredDate;
+                                      if (it.startDate != null) {
+                                        try {
+                                          preferredDate = DateTime.parse(
+                                            it.startDate!,
+                                          );
+                                        } catch (_) {
+                                          preferredDate = null;
                                         }
-                                      });
-                                      Storage.updateBudgetItem(updatedItem);
+                                      }
+
+                                      await showEditItemDialog(context, it, (
+                                        updatedItem,
+                                      ) {
+                                        setState(() {
+                                          final index = _budget.items
+                                              .indexWhere(
+                                                (item) => item.id == it.id,
+                                              );
+                                          if (index != -1) {
+                                            _budget.items[index] = updatedItem;
+                                          }
+                                        });
+                                        Storage.updateBudgetItem(updatedItem);
+                                        widget.onChanged?.call(_budget);
+                                      }, preferredDate: preferredDate);
+                                    },
+                                  ),
+                                  const Icon(Icons.chevron_right),
+                                ],
+                              ),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => ItemDetailScreen(
+                                    budget: _budget,
+                                    item: it,
+                                    onChanged: (updated) {
+                                      setState(() => _budget = updated);
                                       widget.onChanged?.call(_budget);
-                                    }, preferredDate: preferredDate);
-                                  },
-                                ),
-                                const Icon(Icons.chevron_right),
-                              ],
-                            ),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => ItemDetailScreen(
-                                  budget: _budget,
-                                  item: it,
-                                  onChanged: (updated) {
-                                    setState(() => _budget = updated);
-                                    widget.onChanged?.call(_budget);
-                                  },
+                                    },
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    }).toList(),
+                        );
+                      }).toList(),
                     ),
                   const SizedBox(height: 12),
                 ],
@@ -614,9 +626,9 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                   children: [
                     Text(
                       'Monthly ranges',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleMedium?.copyWith(color: Colors.white),
                     ),
                     Text(
                       '${_currentPage + 1} / ${months.length}',
@@ -666,7 +678,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                           ],
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.chevron_left, color: Colors.white),
+                          icon: const Icon(
+                            Icons.chevron_left,
+                            color: Colors.white,
+                          ),
                           onPressed: () {
                             _pageController.previousPage(
                               duration: const Duration(milliseconds: 300),
@@ -697,7 +712,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                           ],
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.chevron_right, color: Colors.white),
+                          icon: const Icon(
+                            Icons.chevron_right,
+                            color: Colors.white,
+                          ),
                           onPressed: () {
                             _pageController.nextPage(
                               duration: const Duration(milliseconds: 300),

@@ -116,10 +116,6 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 // show start/override date if present
                 final overrideDateStr =
                     _budget.monthItemOverrides[m]?[_item.id];
-                final startToShow = overrideDateStr ?? _item.startDate;
-                if (startToShow != null) {
-                  label = '$label\nDate: $startToShow';
-                }
 
                 String rangeLabel = _budget.monthRangeLabel(m);
                 // Only show the list tile if the range label is valid (not empty)
