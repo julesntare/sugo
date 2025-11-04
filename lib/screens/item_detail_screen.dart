@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/budget.dart';
 import '../models/budget_item.dart';
+import '../models/sub_item.dart';
 import '../services/storage.dart';
 import '../widgets/sub_items_list.dart';
 import '../widgets/sub_item_dialog.dart';
@@ -393,33 +394,77 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   Future<void> _addSubItem() async {
     final result = await showSubItemDialog(context, maxAmount: _item.amount);
     if (result != null) {
+      // If user marked as completed and it's a "once" item without a start date,
+      // set the start date to today so it only applies to the current active month
+      SubItem subItemToAdd = result.subItem;
+      String? monthKey;
+
+      if (result.markAsCompleted &&
+          result.subItem.frequency == 'once' &&
+          result.subItem.startDate == null) {
+        // Get the current active month (based on salary date ranges)
+        monthKey = _budget.currentActiveMonthKey();
+
+        // Set the start date to today
+        subItemToAdd = result.subItem.copyWith(
+          startDate: DateFormat('yyyy-MM-dd').format(DateTime.now()),
+        );
+      }
+
       setState(() {
-        _item.subItems.add(result.subItem);
+        _item.subItems.add(subItemToAdd);
 
         // If user marked as completed, update the checklist for the relevant month
         if (result.markAsCompleted) {
-          String? monthKey;
-
           // Determine which month to mark as completed
-          if (result.subItem.startDate != null) {
-            // Use the month from the start date
-            final startDate = DateTime.parse(result.subItem.startDate!);
-            monthKey = DateFormat('yyyy-MM').format(startDate);
-          } else if (result.subItem.frequency == 'once') {
-            // For "once" items without start date, use current month
-            monthKey = DateFormat('yyyy-MM').format(DateTime.now());
+          if (monthKey == null) {
+            // If monthKey wasn't set above, calculate it based on the start date
+            if (subItemToAdd.startDate != null) {
+              // Find which month range contains this start date
+              final startDate = DateTime.parse(subItemToAdd.startDate!);
+              final keys = _budget.monthKeys();
+
+              for (final key in keys) {
+                final parts = key.split('-');
+                final year = int.parse(parts[0]);
+                final month = int.parse(parts[1]);
+
+                // Calculate the salary date range for this month
+                final thisMonthSalary = _budget.salaryDateForMonth(key);
+                DateTime rangeStart = thisMonthSalary;
+
+                final nextDate = DateTime(year, month + 1, 1);
+                final nextKey =
+                    '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+                DateTime rangeEnd;
+
+                final isLast = keys.isNotEmpty && key == keys.last;
+                if (isLast) {
+                  rangeEnd = _budget.end;
+                } else {
+                  final nextSalary = _budget.salaryDateForMonth(nextKey);
+                  rangeEnd = nextSalary.subtract(const Duration(days: 1));
+                }
+
+                // Check if the start date falls within this month's range
+                if (!startDate.isBefore(rangeStart) && !startDate.isAfter(rangeEnd)) {
+                  monthKey = key;
+                  break;
+                }
+              }
+            }
           }
 
           // Update checklist if we have a month
-          if (monthKey != null && _budget.monthKeys().contains(monthKey)) {
-            final monthChecklist = _budget.checklist[monthKey] ?? {};
-            final checklistKey = 'subitem_${_item.id}_${result.subItem.id}';
+          if (monthKey != null) {
+            final monthChecklist = _budget.checklist[monthKey!] ?? {};
+            final checklistKey = 'subitem_${_item.id}_${subItemToAdd.id}';
             monthChecklist[checklistKey] = true;
-            _budget.checklist[monthKey] = monthChecklist;
+            _budget.checklist[monthKey!] = monthChecklist;
           }
         }
       });
-      await Storage.addSubItem(_item.id, result.subItem);
+      await Storage.addSubItem(_item.id, subItemToAdd);
       // Save the budget to persist checklist changes
       await Storage.updateBudget(_budget);
       // Update budget item in the main budget

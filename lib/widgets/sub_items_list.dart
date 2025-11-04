@@ -315,8 +315,13 @@ class _SubItemsListState extends State<SubItemsList> {
                 widget.checklist!['subitem_${widget.parentItemId}_${subItem.id}'] ==
                     true,
             onChanged: (value) {
+              // Toggle based on current checklist state, not the checkbox value
+              final checklistKey = 'subitem_${widget.parentItemId}_${subItem.id}';
+              final currentValue = widget.checklist?[checklistKey] ?? false;
+              final newValue = !currentValue;
+
               final updatedSubItem = subItem.copyWith(
-                isCompleted: value ?? false,
+                isCompleted: newValue,
               );
               widget.onToggleCompleted(updatedSubItem, widget.monthKey);
             },
