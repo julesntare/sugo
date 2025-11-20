@@ -156,7 +156,9 @@ Future<void> showEditItemDialog(
                       ? null
                       : DateFormat('yyyy-MM-dd').format(startDate!),
                   hasSubItems: enableSubItems,
+                  subItems: item.subItems, // PRESERVE existing sub-items!
                 );
+
                 onSave(updatedItem);
                 Navigator.of(ctx).pop();
               }

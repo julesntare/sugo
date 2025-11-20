@@ -123,7 +123,8 @@ class Storage {
     final newSubIds = item.subItems.map((e) => e.id).toSet();
 
     // Delete sub-items that no longer exist in the budget item
-    for (var id in existingSubIds.difference(newSubIds)) {
+    final toDelete = existingSubIds.difference(newSubIds);
+    for (var id in toDelete) {
       await _db.deleteSubItem(id);
     }
 
@@ -145,6 +146,8 @@ class Storage {
   /// Update an existing budget item
   static Future<void> updateBudgetItem(BudgetItem item) async {
     await _db.updateBudgetItem(item);
+    // IMPORTANT: Also update sub-items!
+    await _updateSubItemsForItem(item);
   }
 
   /// Delete a budget item
