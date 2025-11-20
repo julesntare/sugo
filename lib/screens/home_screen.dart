@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/budget.dart';
 import '../services/storage.dart';
+import '../services/backup_service.dart';
 import '../widgets/app_theme.dart';
 import '../widgets/budget_card.dart';
 import '../widgets/create_budget_dialog.dart';
 import 'budget_detail_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,6 +24,20 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadBudgets();
+    _checkAutoBackup();
+  }
+
+  Future<void> _checkAutoBackup() async {
+    final shouldBackup = await BackupService.shouldRunAutoBackup();
+    if (shouldBackup) {
+      await BackupService.performAutoBackup();
+    }
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+    );
   }
 
   Future<void> _loadBudgets() async {
@@ -104,6 +120,13 @@ class _HomeScreenState extends State<HomeScreen> {
             expandedHeight: 180,
             floating: false,
             pinned: true,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings),
+                onPressed: _openSettings,
+                tooltip: 'Settings',
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               title: const Text(
                 'Sugo',
