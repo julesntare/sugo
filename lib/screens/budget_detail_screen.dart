@@ -550,6 +550,39 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+                          tooltip: 'Item options',
+                          onSelected: (value) {
+                            if (value == 'adjust') {
+                              _adjustItemAmount(it, key);
+                            } else if (value == 'deduce') {
+                              _deduceItemAmount(it, key);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'adjust',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.add_circle_outline, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('Adjust (Add)'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'deduce',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.remove_circle_outline, size: 18, color: AppColors.danger),
+                                  SizedBox(width: 8),
+                                  Text('Deduce (Subtract)', style: TextStyle(color: AppColors.danger)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                         if (showCloseButton)
                           IconButton(
                             icon: const Icon(Icons.check_circle_outline, color: AppColors.teal),
@@ -681,6 +714,302 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
     );
   }
 
+  Future<void> _adjustBudgetAmount() async {
+    final controller = TextEditingController();
+    final numberFormat = NumberFormat('#,###');
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.slate,
+        title: const Text('Adjust Budget Amount'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Current: ${numberFormat.format(_budget.amount)} Rwf',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Adjustment Amount',
+                hintText: 'Enter amount to add',
+                suffixText: 'Rwf',
+                prefixIcon: Icon(Icons.add, color: AppColors.lightGrey),
+              ),
+              keyboardType: TextInputType.number,
+              onChanged: (value) {
+                if (value.isEmpty) return;
+                String cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                if (cleanValue.isEmpty) return;
+                int number = int.tryParse(cleanValue) ?? 0;
+                final formatted = numberFormat.format(number);
+                controller.value = TextEditingValue(
+                  text: formatted,
+                  selection: TextSelection.collapsed(offset: formatted.length),
+                );
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final cleanValue = controller.text.replaceAll(RegExp(r'[^\d]'), '');
+              final adjustment = double.tryParse(cleanValue) ?? 0;
+              if (adjustment > 0) {
+                setState(() {
+                  _budget = Budget(
+                    id: _budget.id,
+                    title: _budget.title,
+                    amount: _budget.amount + adjustment,
+                    start: _budget.start,
+                    end: _budget.end,
+                    items: _budget.items,
+                    checklist: _budget.checklist,
+                    completionDates: _budget.completionDates,
+                    monthSalaryOverrides: _budget.monthSalaryOverrides,
+                    monthItemOverridesParam: _budget.monthItemOverrides,
+                    monthItemAmountOverridesParam: _budget.monthItemAmountOverrides,
+                    monthlyTransfers: _budget.monthlyTransfers,
+                    closedMiscItems: _budget.closedMiscItems,
+                  );
+                });
+                Storage.updateBudget(_budget);
+                widget.onChanged?.call(_budget);
+                Navigator.of(ctx).pop();
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _adjustItemAmount(BudgetItem item, String monthKey) async {
+    final controller = TextEditingController();
+    final numberFormat = NumberFormat('#,###');
+    final currentAmount = _budget.monthItemAmountOverrides[monthKey]?[item.id] ?? item.amount ?? 0.0;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.slate,
+        title: Text('Adjust ${item.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Current: ${numberFormat.format(currentAmount)} Rwf',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Adjustment Amount',
+                hintText: 'Enter amount to add',
+                suffixText: 'Rwf',
+                prefixIcon: Icon(Icons.add, color: AppColors.lightGrey),
+              ),
+              keyboardType: TextInputType.number,
+              onChanged: (value) {
+                if (value.isEmpty) return;
+                String cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                if (cleanValue.isEmpty) return;
+                int number = int.tryParse(cleanValue) ?? 0;
+                final formatted = numberFormat.format(number);
+                controller.value = TextEditingValue(
+                  text: formatted,
+                  selection: TextSelection.collapsed(offset: formatted.length),
+                );
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final cleanValue = controller.text.replaceAll(RegExp(r'[^\d]'), '');
+              final adjustment = double.tryParse(cleanValue) ?? 0;
+              if (adjustment > 0) {
+                setState(() {
+                  final amounts = _budget.monthItemAmountOverrides[monthKey] ?? {};
+                  amounts[item.id] = currentAmount + adjustment;
+                  _budget.monthItemAmountOverrides[monthKey] = amounts;
+                });
+                Storage.updateBudget(_budget);
+                widget.onChanged?.call(_budget);
+                Navigator.of(ctx).pop();
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deduceItemAmount(BudgetItem item, String monthKey) async {
+    final controller = TextEditingController();
+    final numberFormat = NumberFormat('#,###');
+    final currentAmount = _budget.monthItemAmountOverrides[monthKey]?[item.id] ?? item.amount ?? 0.0;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.slate,
+        title: Text('Deduce ${item.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Current: ${numberFormat.format(currentAmount)} Rwf',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Deduction Amount',
+                hintText: 'Enter amount to subtract',
+                suffixText: 'Rwf',
+                prefixIcon: Icon(Icons.remove, color: AppColors.lightGrey),
+              ),
+              keyboardType: TextInputType.number,
+              onChanged: (value) {
+                if (value.isEmpty) return;
+                String cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                if (cleanValue.isEmpty) return;
+                int number = int.tryParse(cleanValue) ?? 0;
+                final formatted = numberFormat.format(number);
+                controller.value = TextEditingValue(
+                  text: formatted,
+                  selection: TextSelection.collapsed(offset: formatted.length),
+                );
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () {
+              final cleanValue = controller.text.replaceAll(RegExp(r'[^\d]'), '');
+              final deduction = double.tryParse(cleanValue) ?? 0;
+              if (deduction > 0 && deduction <= currentAmount) {
+                setState(() {
+                  final amounts = _budget.monthItemAmountOverrides[monthKey] ?? {};
+                  amounts[item.id] = currentAmount - deduction;
+                  _budget.monthItemAmountOverrides[monthKey] = amounts;
+                });
+                Storage.updateBudget(_budget);
+                widget.onChanged?.call(_budget);
+                Navigator.of(ctx).pop();
+              }
+            },
+            child: const Text('Subtract'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deduceBudgetAmount() async {
+    final controller = TextEditingController();
+    final numberFormat = NumberFormat('#,###');
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.slate,
+        title: const Text('Deduce Budget Amount'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Current: ${numberFormat.format(_budget.amount)} Rwf',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Deduction Amount',
+                hintText: 'Enter amount to subtract',
+                suffixText: 'Rwf',
+                prefixIcon: Icon(Icons.remove, color: AppColors.lightGrey),
+              ),
+              keyboardType: TextInputType.number,
+              onChanged: (value) {
+                if (value.isEmpty) return;
+                String cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                if (cleanValue.isEmpty) return;
+                int number = int.tryParse(cleanValue) ?? 0;
+                final formatted = numberFormat.format(number);
+                controller.value = TextEditingValue(
+                  text: formatted,
+                  selection: TextSelection.collapsed(offset: formatted.length),
+                );
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () {
+              final cleanValue = controller.text.replaceAll(RegExp(r'[^\d]'), '');
+              final deduction = double.tryParse(cleanValue) ?? 0;
+              if (deduction > 0 && deduction <= _budget.amount) {
+                setState(() {
+                  _budget = Budget(
+                    id: _budget.id,
+                    title: _budget.title,
+                    amount: _budget.amount - deduction,
+                    start: _budget.start,
+                    end: _budget.end,
+                    items: _budget.items,
+                    checklist: _budget.checklist,
+                    completionDates: _budget.completionDates,
+                    monthSalaryOverrides: _budget.monthSalaryOverrides,
+                    monthItemOverridesParam: _budget.monthItemOverrides,
+                    monthItemAmountOverridesParam: _budget.monthItemAmountOverrides,
+                    monthlyTransfers: _budget.monthlyTransfers,
+                    closedMiscItems: _budget.closedMiscItems,
+                  );
+                });
+                Storage.updateBudget(_budget);
+                widget.onChanged?.call(_budget);
+                Navigator.of(ctx).pop();
+              }
+            },
+            child: const Text('Subtract'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final allMonths = _budget.monthKeys();
@@ -710,7 +1039,21 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(_budget.title)),
+      appBar: AppBar(
+        title: Text(_budget.title),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'Adjust Budget (Add)',
+            onPressed: _adjustBudgetAmount,
+          ),
+          IconButton(
+            icon: const Icon(Icons.remove_circle_outline),
+            tooltip: 'Deduce Budget (Subtract)',
+            onPressed: _deduceBudgetAmount,
+          ),
+        ],
+      ),
       body: Column(
         children: [
           // Budget items header section
