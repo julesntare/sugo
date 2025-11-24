@@ -42,6 +42,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
   Future<void> _loadBudget() async {
     final budget = await Storage.loadBudget(widget.budget.id);
     if (budget != null && mounted) {
+      // Auto-close miscellaneous items if monthly range has passed
+      budget.autoCloseMiscItems();
+      await Storage.updateBudget(budget);
+
       setState(() {
         _budget = budget;
       });
@@ -461,6 +465,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
 
                   final checked = explicitlyChecked || isAutoChecked;
 
+                  // Check if this misc item is closed
+                  final isClosed = _budget.closedMiscItems[key]?[it.id] ?? false;
+                  final transferredAmount = _budget.monthlyTransfers[key]?[it.id] ?? 0.0;
+
                   // Build frequency label
                   String frequencyLabel = '';
                   if (it.frequency == 'monthly') {
@@ -491,6 +499,45 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     frequencyLabel += '\nStarted: $completionDate';
                   }
 
+                  // If closed, show transferred amount instead of remaining
+                  if (isClosed && transferredAmount > 0) {
+                    frequencyLabel += '\nTransferred: ${fmt.format(transferredAmount)} Rwf';
+                  } else if (it.hasSubItems && !isClosed) {
+                    // Show remaining amount for unclosed misc items
+                    final remaining = _budget.remainingAmountForItemInMonth(it.id, key);
+                    if (remaining != 0) {
+                      frequencyLabel += '\nRemaining: ${fmt.format(remaining)} Rwf';
+                    }
+                  }
+
+                  // Calculate if we should show the close button
+                  // Show on the end date of current monthly range
+                  final now = DateTime.now();
+                  final parts = key.split('-');
+                  final year = int.parse(parts[0]);
+                  final month = int.parse(parts[1]);
+                  final nextDate = DateTime(year, month + 1, 1);
+                  final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+                  final keys = _budget.monthKeys();
+                  final isLast = keys.isNotEmpty && key == keys.last;
+                  DateTime rangeEnd;
+                  if (isLast) {
+                    rangeEnd = _budget.end;
+                  } else {
+                    final nextSalary = _budget.salaryDateForMonth(nextKey);
+                    rangeEnd = nextSalary.subtract(const Duration(days: 1));
+                  }
+
+                  // Show close button if:
+                  // 1. Item has sub-items (is miscellaneous)
+                  // 2. Not already closed
+                  // 3. Not the last month
+                  // 4. Current date is on or near the range end (within 7 days)
+                  final showCloseButton = it.hasSubItems &&
+                                         !isClosed &&
+                                         !isLast &&
+                                         now.isAfter(rangeEnd.subtract(const Duration(days: 7)));
+
                   return ListTile(
                     title: Text(
                       it.name,
@@ -500,7 +547,31 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                       frequencyLabel,
                       style: TextStyle(color: AppColors.lightGrey),
                     ),
-                    trailing: Checkbox(
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (showCloseButton)
+                          IconButton(
+                            icon: const Icon(Icons.check_circle_outline, color: AppColors.teal),
+                            tooltip: 'Close and transfer remaining to next month',
+                            onPressed: () async {
+                              final success = _budget.closeMiscItem(it.id, key);
+                              if (success) {
+                                setState(() {});
+                                await Storage.updateBudget(_budget);
+                                widget.onChanged?.call(_budget);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('${it.name} closed and remaining transferred to next month'),
+                                      backgroundColor: AppColors.teal,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        Checkbox(
                       value: checked,
                       fillColor: WidgetStateProperty.resolveWith<Color>((
                         states,
@@ -586,6 +657,8 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                           // If only partially checked, user must go to sub-items to uncheck
                         }
                       },
+                        ),
+                      ],
                     ),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(

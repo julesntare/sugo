@@ -25,6 +25,12 @@ class Budget {
   /// Optional per-month per-item amount overrides: key YYYY-MM -> itemId -> amount
   final Map<String, Map<String, double>> monthItemAmountOverrides;
 
+  /// Track transferred amounts from closed misc items: key YYYY-MM -> itemId -> transferred amount
+  final Map<String, Map<String, double>> monthlyTransfers;
+
+  /// Track which misc items have been closed for each month: key YYYY-MM -> itemId -> closed
+  final Map<String, Map<String, bool>> closedMiscItems;
+
   Budget({
     required this.id,
     required this.title,
@@ -37,12 +43,16 @@ class Budget {
     Map<String, String>? monthSalaryOverrides,
     Map<String, Map<String, String>>? monthItemOverridesParam,
     Map<String, Map<String, double>>? monthItemAmountOverridesParam,
+    Map<String, Map<String, double>>? monthlyTransfers,
+    Map<String, Map<String, bool>>? closedMiscItems,
   }) : items = List<BudgetItem>.from(items ?? <BudgetItem>[]),
        checklist = checklist ?? {},
        completionDates = completionDates ?? {},
        monthSalaryOverrides = monthSalaryOverrides ?? {},
        monthItemOverrides = monthItemOverridesParam ?? {},
-       monthItemAmountOverrides = monthItemAmountOverridesParam ?? {};
+       monthItemAmountOverrides = monthItemAmountOverridesParam ?? {},
+       monthlyTransfers = monthlyTransfers ?? {},
+       closedMiscItems = closedMiscItems ?? {};
 
   // Convert Budget to Map for SQLite
   Map<String, dynamic> toMap() {
@@ -490,6 +500,85 @@ class Budget {
     return monthlySalary - deductions;
   }
 
+  /// Close a miscellaneous item for a specific month and transfer remaining amount to next month
+  /// Returns true if successful, false otherwise
+  bool closeMiscItem(String itemId, String monthKey) {
+    final item = items.firstWhere(
+      (it) => it.id == itemId,
+      orElse: () => BudgetItem(id: '', name: ''),
+    );
+
+    // Only allow closing items with sub-items
+    if (!item.hasSubItems || item.id.isEmpty) return false;
+
+    final keys = monthKeys();
+    final currentIndex = keys.indexOf(monthKey);
+
+    // Can't close if this is the last month or month not found
+    if (currentIndex == -1 || currentIndex >= keys.length - 1) return false;
+
+    final nextMonthKey = keys[currentIndex + 1];
+    final remaining = remainingAmountForItemInMonth(itemId, monthKey);
+
+    // Only transfer if there's a positive remaining amount
+    if (remaining > 0) {
+      // Record the transferred amount
+      final transferMap = monthlyTransfers[monthKey] ?? {};
+      transferMap[itemId] = remaining;
+      monthlyTransfers[monthKey] = transferMap;
+
+      // Add to next month's item amount
+      final nextMonthAmounts = monthItemAmountOverrides[nextMonthKey] ?? {};
+      final currentNextMonthAmount = nextMonthAmounts[itemId] ?? item.amount ?? 0.0;
+      nextMonthAmounts[itemId] = currentNextMonthAmount + remaining;
+      monthItemAmountOverrides[nextMonthKey] = nextMonthAmounts;
+    }
+
+    // Mark as closed
+    final closedMap = closedMiscItems[monthKey] ?? {};
+    closedMap[itemId] = true;
+    closedMiscItems[monthKey] = closedMap;
+
+    // Mark the checkbox for this month
+    final checkMap = checklist[monthKey] ?? {};
+    checkMap[itemId] = true;
+    checklist[monthKey] = checkMap;
+
+    return true;
+  }
+
+  /// Auto-close miscellaneous items when entering a new monthly range
+  /// Should be called when loading a budget or navigating to a new month
+  void autoCloseMiscItems() {
+    final now = DateTime.now();
+    final keys = monthKeys();
+
+    for (int i = 0; i < keys.length - 1; i++) {
+      final monthKey = keys[i];
+      final parts = monthKey.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+
+      // Calculate range end for this month
+      final nextDate = DateTime(year, month + 1, 1);
+      final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+      final nextSalary = salaryDateForMonth(nextKey);
+      final rangeEnd = nextSalary.subtract(const Duration(days: 1));
+
+      // If current date is past this month's range end, auto-close unclosed misc items
+      if (now.isAfter(rangeEnd)) {
+        for (final item in items) {
+          if (item.hasSubItems) {
+            final isClosed = closedMiscItems[monthKey]?[item.id] ?? false;
+            if (!isClosed) {
+              closeMiscItem(item.id, monthKey);
+            }
+          }
+        }
+      }
+    }
+  }
+
   /// Find the current active month key based on today's date and salary ranges
   /// Returns the month key whose salary range contains today's date
   /// If today is before the budget starts, returns the first month
@@ -557,6 +646,8 @@ class Budget {
     'monthSalaryOverrides': monthSalaryOverrides,
     'monthItemOverrides': monthItemOverrides,
     'monthItemAmountOverrides': monthItemAmountOverrides,
+    'monthlyTransfers': monthlyTransfers,
+    'closedMiscItems': closedMiscItems,
   };
 
   factory Budget.fromJson(Map<String, dynamic> json) {
@@ -604,6 +695,19 @@ class Budget {
                 (ik, iv) => MapEntry(ik, (iv as num).toDouble()),
               ),
             ),
+          ),
+      monthlyTransfers:
+          (json['monthlyTransfers'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(
+              k,
+              (v as Map<String, dynamic>).map(
+                (ik, iv) => MapEntry(ik, (iv as num).toDouble()),
+              ),
+            ),
+          ),
+      closedMiscItems:
+          (json['closedMiscItems'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, Map<String, bool>.from(v as Map)),
           ),
     );
   }
