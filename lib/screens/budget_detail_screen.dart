@@ -698,6 +698,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                         builder: (_) => ItemDetailScreen(
                           budget: _budget,
                           item: it,
+                          initialMonthKey: key,
                           onChanged: (updated) {
                             setState(() => _budget = updated);
                             widget.onChanged?.call(_budget);

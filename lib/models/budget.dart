@@ -374,7 +374,7 @@ class Budget {
       orElse: () => BudgetItem(id: '', name: '', amount: 0),
     );
     final itemAmountInMonth = _deductionForItemInMonth(budgetItem, monthKey);
-    final subItemTotal = subItemTotalForMonth(itemId, monthKey);
+    final subItemTotal = subItemTotalForMonthInChecklist(itemId, monthKey);
 
     return itemAmountInMonth - subItemTotal;
   }
@@ -470,6 +470,37 @@ class Budget {
         return '${n}rd';
       default:
         return '${n}th';
+    }
+  }
+
+  /// Check if a monthly range has ended (rangeEnd is before current date)
+  bool isMonthlyRangeEnded(String monthKey, {int cutoffDay = 25}) {
+    try {
+      final parts = monthKey.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+
+      // Calculate the range end date for this month
+      final keys = monthKeys();
+      final nextDate = DateTime(year, month + 1, 1);
+      final nextKey =
+          '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+      DateTime endDate;
+
+      // If this is the last month of the budget, end at budget.end
+      final isLast = keys.isNotEmpty && monthKey == keys.last;
+      if (isLast) {
+        endDate = end;
+      } else {
+        final nextSalary = salaryDateForMonth(nextKey, cutoffDay: cutoffDay);
+        endDate = nextSalary.subtract(const Duration(days: 1));
+      }
+
+      // Check if the range end is before the current date
+      final now = DateTime.now();
+      return endDate.isBefore(DateTime(now.year, now.month, now.day));
+    } catch (_) {
+      return false;
     }
   }
 

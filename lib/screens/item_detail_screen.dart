@@ -7,17 +7,20 @@ import '../models/sub_item.dart';
 import '../services/storage.dart';
 import '../widgets/sub_items_list.dart';
 import '../widgets/sub_item_dialog.dart';
+import '../widgets/app_theme.dart';
 
 class ItemDetailScreen extends StatefulWidget {
   final Budget budget;
   final BudgetItem item;
   final void Function(Budget updated)? onChanged;
+  final String? initialMonthKey;
 
   const ItemDetailScreen({
     super.key,
     required this.budget,
     required this.item,
     this.onChanged,
+    this.initialMonthKey,
   });
 
   @override
@@ -27,16 +30,44 @@ class ItemDetailScreen extends StatefulWidget {
 class _ItemDetailScreenState extends State<ItemDetailScreen> {
   late Budget _budget;
   late BudgetItem _item;
+  late PageController _pageController;
+  int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
     _budget = widget.budget;
     _item = widget.item;
+
+    // Initialize PageController with the correct initial page if initialMonthKey is provided
+    final months = _getFilteredMonths();
+    int initialPage = 0;
+    if (widget.initialMonthKey != null) {
+      final index = months.indexOf(widget.initialMonthKey!);
+      if (index != -1) {
+        initialPage = index;
+        _currentPage = initialPage;
+      }
+    }
+    _pageController = PageController(initialPage: initialPage);
   }
 
   @override
-  Widget build(BuildContext context) {
+  void didUpdateWidget(ItemDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.budget != widget.budget || oldWidget.item != widget.item) {
+      _budget = widget.budget;
+      _item = widget.item;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  List<String> _getFilteredMonths() {
     final allMonths = _budget.monthKeys();
     // Determine months to show based on frequency/startDate
     List<String> months;
@@ -48,346 +79,628 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     } else {
       months = List.from(allMonths);
     }
-    final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
-    return Scaffold(
-      appBar: AppBar(title: Text(_item.name)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+
+    return months.where((m) {
+      // Only include months where the item should be displayed based on its start date
+      if (_item.startDate == null) {
+        return true; // If no start date, show all months
+      }
+
+      try {
+        final itemStartDate = DateTime.parse(_item.startDate!);
+
+        // Get the end date of the month range to determine if item's start date is before or within this range
+        final monthParts = m.split('-');
+        final monthStart = DateTime(
+          int.parse(monthParts[0]),
+          int.parse(monthParts[1]),
+          1,
+        );
+        final nextDate = DateTime(
+          monthStart.year,
+          monthStart.month + 1,
+          1,
+        );
+        final nextKey =
+            '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+        final keys = _budget.monthKeys();
+        final isLast = keys.isNotEmpty && m == keys.last;
+
+        DateTime endDate;
+        if (isLast) {
+          endDate = _budget.end;
+        } else {
+          final nextSalary = _budget.salaryDateForMonth(nextKey);
+          endDate = nextSalary.subtract(const Duration(days: 1));
+        }
+
+        // Only include this month if the item's start date is not after the end of the month range
+        return !itemStartDate.isAfter(endDate);
+      } catch (e) {
+        // If there's an issue parsing the date, show the month by default
+        return true;
+      }
+    }).toList();
+  }
+
+  Widget _buildMonthCard(String m, NumberFormat fmt) {
+    final map = _budget.checklist[m] ?? {};
+    final checked = map[_item.id] == true;
+
+    // label: frequency + base amount or overridden amount for month
+    final overriddenAmount =
+        _budget.monthItemAmountOverrides[m]?[_item.id];
+    String label = '';
+    final displayAmount = overriddenAmount ?? _item.amount ?? 0;
+    if (_item.frequency == 'monthly') {
+      label = 'Monthly: ${fmt.format(displayAmount)} Rwf';
+    } else if (_item.frequency == 'weekly') {
+      label = 'Weekly: ${fmt.format(displayAmount)} Rwf';
+    } else if (_item.frequency == 'once') {
+      label = 'One-time: ${fmt.format(displayAmount)} Rwf';
+    }
+
+    // show start/override date if present
+    final overrideDateStr =
+        _budget.monthItemOverrides[m]?[_item.id];
+
+    String rangeLabel = _budget.monthRangeLabel(m);
+    // Only show the list tile if the range label is valid (not empty)
+    if (rangeLabel.isEmpty) {
+      return const SizedBox.shrink(); // Don't render anything for invalid ranges
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Month range list
-          ...months
-              .where((m) {
-                // Only include months where the item should be displayed based on its start date
-                if (_item.startDate == null) {
-                  return true; // If no start date, show all months
-                }
+          ListTile(
+            title: Text(rangeLabel),
+            subtitle: Text(label),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Edit amount/date for this month',
+                  icon: const Icon(Icons.edit, color: Colors.white),
+                  onPressed: () async {
+                    final amountCtrl = TextEditingController(
+                      text: (overriddenAmount ?? _item.amount ?? 0)
+                          .toStringAsFixed(0),
+                    );
+                    DateTime? initialDate;
+                    try {
+                      if (overrideDateStr != null) {
+                        initialDate = DateTime.parse(overrideDateStr);
+                      } else if (_item.startDate != null) {
+                        initialDate = DateTime.parse(
+                          _item.startDate!,
+                        );
+                      }
+                    } catch (_) {
+                      initialDate = null;
+                    }
 
-                try {
-                  final itemStartDate = DateTime.parse(_item.startDate!);
-
-                  // Get the end date of the month range to determine if item's start date is before or within this range
-                  final monthParts = m.split('-');
-                  final monthStart = DateTime(
-                    int.parse(monthParts[0]),
-                    int.parse(monthParts[1]),
-                    1,
-                  );
-                  final nextDate = DateTime(
-                    monthStart.year,
-                    monthStart.month + 1,
-                    1,
-                  );
-                  final nextKey =
-                      '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
-                  final keys = _budget.monthKeys();
-                  final isLast = keys.isNotEmpty && m == keys.last;
-
-                  DateTime endDate;
-                  if (isLast) {
-                    endDate = _budget.end;
-                  } else {
-                    final nextSalary = _budget.salaryDateForMonth(nextKey);
-                    endDate = nextSalary.subtract(const Duration(days: 1));
-                  }
-
-                  // Only include this month if the item's start date is not after the end of the month range
-                  return !itemStartDate.isAfter(endDate);
-                } catch (e) {
-                  // If there's an issue parsing the date, show the month by default
-                  return true;
-                }
-              })
-              .map((m) {
-                final map = _budget.checklist[m] ?? {};
-                final checked = map[_item.id] == true;
-
-                // label: frequency + base amount or overridden amount for month
-                final overriddenAmount =
-                    _budget.monthItemAmountOverrides[m]?[_item.id];
-                String label = '';
-                final displayAmount = overriddenAmount ?? _item.amount ?? 0;
-                if (_item.frequency == 'monthly') {
-                  label = 'Monthly: ${fmt.format(displayAmount)} Rwf';
-                } else if (_item.frequency == 'weekly') {
-                  label = 'Weekly: ${fmt.format(displayAmount)} Rwf';
-                } else if (_item.frequency == 'once') {
-                  label = 'One-time: ${fmt.format(displayAmount)} Rwf';
-                }
-
-                // show start/override date if present
-                final overrideDateStr =
-                    _budget.monthItemOverrides[m]?[_item.id];
-
-                String rangeLabel = _budget.monthRangeLabel(m);
-                // Only show the list tile if the range label is valid (not empty)
-                if (rangeLabel.isEmpty) {
-                  return const SizedBox.shrink(); // Don't render anything for invalid ranges
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ListTile(
-                      title: Text(rangeLabel),
-                      subtitle: Text(label),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Edit amount/date for this month',
-                            icon: const Icon(Icons.edit, color: Colors.white),
-                            onPressed: () async {
-                              final amountCtrl = TextEditingController(
-                                text: (overriddenAmount ?? _item.amount ?? 0)
-                                    .toStringAsFixed(0),
-                              );
-                              DateTime? initialDate;
-                              try {
-                                if (overrideDateStr != null) {
-                                  initialDate = DateTime.parse(overrideDateStr);
-                                } else if (_item.startDate != null) {
-                                  initialDate = DateTime.parse(
-                                    _item.startDate!,
-                                  );
-                                }
-                              } catch (_) {
-                                initialDate = null;
-                              }
-
-                              await showDialog<DateTime?>(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: const Text('Edit month override'),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      TextField(
-                                        controller: amountCtrl,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Amount (Rwf)',
-                                        ),
-                                        keyboardType: TextInputType.number,
-                                        inputFormatters: [ThousandsFormatter()],
-                                      ),
-                                      const SizedBox(height: 12),
-                                      OutlinedButton.icon(
-                                        onPressed: () async {
-                                          final now = DateTime.now();
-                                          final d = await showDatePicker(
-                                            context: context,
-                                            initialDate: initialDate ?? now,
-                                            firstDate: DateTime(
-                                              _budget.start.year - 1,
-                                            ),
-                                            lastDate: DateTime(
-                                              _budget.end.year + 1,
-                                            ),
-                                          );
-                                          if (d != null) {
-                                            initialDate = d;
-                                          }
-                                        },
-                                        icon: const Icon(Icons.calendar_today),
-                                        label: Text(
-                                          initialDate == null
-                                              ? 'Pick date'
-                                              : DateFormat(
-                                                  'yyyy-MM-dd',
-                                                ).format(initialDate!),
-                                        ),
-                                      ),
-                                    ],
+                    await showDialog<DateTime?>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Edit month override'),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(
+                              controller: amountCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Amount (Rwf)',
+                              ),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [ThousandsFormatter()],
+                            ),
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                final now = DateTime.now();
+                                final d = await showDatePicker(
+                                  context: context,
+                                  initialDate: initialDate ?? now,
+                                  firstDate: DateTime(
+                                    _budget.start.year - 1,
                                   ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(ctx).pop(null),
-                                      child: const Text('Cancel'),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        // parse amount
-                                        final parsed =
-                                            double.tryParse(
-                                              amountCtrl.text.replaceAll(
-                                                RegExp(r'[^\d]'),
-                                                '',
-                                              ),
-                                            ) ??
-                                            0.0;
-                                        // apply overrides
-                                        setState(() {
-                                          // amount override
-                                          final amounts =
-                                              _budget
-                                                  .monthItemAmountOverrides[m] ??
-                                              {};
-                                          amounts[_item.id] = parsed;
-                                          _budget.monthItemAmountOverrides[m] =
-                                              amounts;
-                                          // date override
-                                          if (initialDate != null) {
-                                            final dates =
-                                                _budget.monthItemOverrides[m] ??
-                                                {};
-                                            dates[_item.id] = DateFormat(
-                                              'yyyy-MM-dd',
-                                            ).format(initialDate!);
-                                            _budget.monthItemOverrides[m] =
-                                                dates;
-                                          }
-                                        });
-                                        // persist
-                                        Storage.updateBudget(_budget);
-                                        widget.onChanged?.call(_budget);
-                                        Navigator.of(ctx).pop(initialDate);
-                                      },
-                                      child: const Text('Save'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              // no further action needed; state updated in dialog
-                            },
+                                  lastDate: DateTime(
+                                    _budget.end.year + 1,
+                                  ),
+                                );
+                                if (d != null) {
+                                  initialDate = d;
+                                }
+                              },
+                              icon: const Icon(Icons.calendar_today),
+                              label: Text(
+                                initialDate == null
+                                    ? 'Pick date'
+                                    : DateFormat(
+                                        'yyyy-MM-dd',
+                                      ).format(initialDate!),
+                              ),
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.of(ctx).pop(null),
+                            child: const Text('Cancel'),
                           ),
-                          Checkbox(
-                            value: checked,
-                            onChanged: (v) {
+                          ElevatedButton(
+                            onPressed: () {
+                              // parse amount
+                              final parsed =
+                                  double.tryParse(
+                                    amountCtrl.text.replaceAll(
+                                      RegExp(r'[^\d]'),
+                                      '',
+                                    ),
+                                  ) ??
+                                  0.0;
+                              // apply overrides
                               setState(() {
-                                final newMap = _budget.checklist[m] ?? {};
-                                newMap[_item.id] = v == true;
-                                _budget.checklist[m] = newMap;
+                                // amount override
+                                final amounts =
+                                    _budget
+                                        .monthItemAmountOverrides[m] ??
+                                    {};
+                                amounts[_item.id] = parsed;
+                                _budget.monthItemAmountOverrides[m] =
+                                    amounts;
+                                // date override
+                                if (initialDate != null) {
+                                  final dates =
+                                      _budget.monthItemOverrides[m] ??
+                                      {};
+                                  dates[_item.id] = DateFormat(
+                                    'yyyy-MM-dd',
+                                  ).format(initialDate!);
+                                  _budget.monthItemOverrides[m] =
+                                      dates;
+                                }
                               });
+                              // persist
+                              Storage.updateBudget(_budget);
                               widget.onChanged?.call(_budget);
+                              Navigator.of(ctx).pop(initialDate);
                             },
+                            child: const Text('Save'),
                           ),
                         ],
                       ),
-                    ),
-                    // Show sub-items section if sub-items are enabled for this item
-                    if (_item.hasSubItems)
-                      SubItemsList(
-                        subItems: _item.subItems,
-                        parentItemId: _item.id, // Pass the parent item ID
-                        budget:
-                            _budget, // Pass the budget for salary date calculations
-                        onEdit: (subItem) async {
-                          final result = await showSubItemDialog(
-                            context,
-                            subItem: subItem,
-                            maxAmount: displayAmount,
-                          );
-                          if (result != null) {
-                            setState(() {
-                              final subItemIndex = _item.subItems.indexWhere(
-                                (s) => s.id == subItem.id,
-                              );
-                              if (subItemIndex != -1) {
-                                _item.subItems[subItemIndex] = result.subItem;
-                              }
-                            });
-                            await Storage.updateSubItem(result.subItem);
-                            // Update budget item in the main budget
-                            final itemIndex = _budget.items.indexWhere(
-                              (item) => item.id == _item.id,
-                            );
-                            if (itemIndex != -1) {
-                              _budget.items[itemIndex] = _item;
-                            }
-                            widget.onChanged?.call(_budget);
-                          }
-                        },
-                        onDelete: (subItem) async {
-                          final confirmed = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Delete Sub-item'),
-                              content: Text(
-                                'Are you sure you want to delete "${subItem.name}"?',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.of(context).pop(false),
-                                  child: const Text('CANCEL'),
-                                ),
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.of(context).pop(true),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.red,
-                                  ),
-                                  child: const Text('DELETE'),
-                                ),
-                              ],
-                            ),
-                          );
-
-                          if (confirmed == true) {
-                            setState(() {
-                              _item.subItems.removeWhere(
-                                (s) => s.id == subItem.id,
-                              );
-                            });
-                            await Storage.deleteSubItem(subItem.id);
-                            // Update budget item in the main budget
-                            final itemIndex = _budget.items.indexWhere(
-                              (item) => item.id == _item.id,
-                            );
-                            if (itemIndex != -1) {
-                              _budget.items[itemIndex] = _item;
-                            }
-                            widget.onChanged?.call(_budget);
-                          }
-                        },
-                        onToggleCompleted: (subItem, monthKey) async {
-                          setState(() {
-                            // Update the checklist for this month with the sub-item completion status
-                            final monthChecklist =
-                                _budget.checklist[monthKey] ?? {};
-                            final checklistKey =
-                                'subitem_${_item.id}_${subItem.id}';
-                            monthChecklist[checklistKey] = subItem.isCompleted;
-                            _budget.checklist[monthKey] = monthChecklist;
-                          });
-                          // Only update the sub-item if the global completion status needs to be changed
-                          // This is for backward compatibility
-                          final subItemIndex = _item.subItems.indexWhere(
-                            (s) => s.id == subItem.id,
-                          );
-                          if (subItemIndex != -1) {
-                            _item.subItems[subItemIndex] = subItem;
-                          }
-                          await Storage.updateSubItem(subItem);
-                          // Update budget item in the main budget
-                          final itemIndex = _budget.items.indexWhere(
-                            (item) => item.id == _item.id,
-                          );
-                          if (itemIndex != -1) {
-                            _budget.items[itemIndex] = _item;
-                          }
-                          // Save the budget to persist checklist changes
-                          await Storage.updateBudget(_budget);
-                          widget.onChanged?.call(_budget);
-                        },
-                        totalAmount: displayAmount,
-                        monthKey: m,
-                        checklist: _budget
-                            .checklist[m], // Pass the checklist for this month
-                        parentStartDate:
-                            _item.startDate, // Pass parent item's start date
-                        hasSubItems: _item.hasSubItems,
-                      ),
-                  ],
+                    );
+                    // no further action needed; state updated in dialog
+                  },
+                ),
+                Checkbox(
+                  value: checked,
+                  onChanged: (v) {
+                    setState(() {
+                      final newMap = _budget.checklist[m] ?? {};
+                      newMap[_item.id] = v == true;
+                      _budget.checklist[m] = newMap;
+                    });
+                    widget.onChanged?.call(_budget);
+                  },
+                ),
+              ],
+            ),
+          ),
+          // Show sub-items section if sub-items are enabled for this item
+          if (_item.hasSubItems)
+            SubItemsList(
+              subItems: _item.subItems,
+              parentItemId: _item.id, // Pass the parent item ID
+              budget:
+                  _budget, // Pass the budget for salary date calculations
+              onEdit: (subItem) async {
+                final result = await showSubItemDialog(
+                  context,
+                  subItem: subItem,
+                  maxAmount: displayAmount,
                 );
-              }),
+                if (result != null) {
+                  setState(() {
+                    final subItemIndex = _item.subItems.indexWhere(
+                      (s) => s.id == subItem.id,
+                    );
+                    if (subItemIndex != -1) {
+                      _item.subItems[subItemIndex] = result.subItem;
+                    }
+                  });
+                  await Storage.updateSubItem(result.subItem);
+                  // Update budget item in the main budget
+                  final itemIndex = _budget.items.indexWhere(
+                    (item) => item.id == _item.id,
+                  );
+                  if (itemIndex != -1) {
+                    _budget.items[itemIndex] = _item;
+                  }
+                  widget.onChanged?.call(_budget);
+                }
+              },
+              onDelete: (subItem) async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Delete Sub-item'),
+                    content: Text(
+                      'Are you sure you want to delete "${subItem.name}"?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(context).pop(false),
+                        child: const Text('CANCEL'),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(context).pop(true),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                        child: const Text('DELETE'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirmed == true) {
+                  setState(() {
+                    _item.subItems.removeWhere(
+                      (s) => s.id == subItem.id,
+                    );
+                  });
+                  await Storage.deleteSubItem(subItem.id);
+                  // Update budget item in the main budget
+                  final itemIndex = _budget.items.indexWhere(
+                    (item) => item.id == _item.id,
+                  );
+                  if (itemIndex != -1) {
+                    _budget.items[itemIndex] = _item;
+                  }
+                  widget.onChanged?.call(_budget);
+                }
+              },
+              onToggleCompleted: (subItem, monthKey) async {
+                setState(() {
+                  // Update the checklist for this month with the sub-item completion status
+                  final monthChecklist =
+                      _budget.checklist[monthKey] ?? {};
+                  final checklistKey =
+                      'subitem_${_item.id}_${subItem.id}';
+                  monthChecklist[checklistKey] = subItem.isCompleted;
+                  _budget.checklist[monthKey] = monthChecklist;
+                });
+                // Only update the sub-item if the global completion status needs to be changed
+                // This is for backward compatibility
+                final subItemIndex = _item.subItems.indexWhere(
+                  (s) => s.id == subItem.id,
+                );
+                if (subItemIndex != -1) {
+                  _item.subItems[subItemIndex] = subItem;
+                }
+                await Storage.updateSubItem(subItem);
+                // Update budget item in the main budget
+                final itemIndex = _budget.items.indexWhere(
+                  (item) => item.id == _item.id,
+                );
+                if (itemIndex != -1) {
+                  _budget.items[itemIndex] = _item;
+                }
+                // Save the budget to persist checklist changes
+                await Storage.updateBudget(_budget);
+                widget.onChanged?.call(_budget);
+              },
+              totalAmount: displayAmount,
+              monthKey: m,
+              checklist: _budget
+                  .checklist[m], // Pass the checklist for this month
+              parentStartDate:
+                  _item.startDate, // Pass parent item's start date
+              hasSubItems: _item.hasSubItems,
+            ),
         ],
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final months = _getFilteredMonths();
+    final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(_item.name)),
+      body: months.isEmpty
+          ? const Center(
+              child: Text('No months to display'),
+            )
+          : _item.hasSubItems
+              ? _buildPageViewLayout(months, fmt)
+              : _buildListViewLayout(months, fmt),
       floatingActionButton: _item.hasSubItems
           ? FloatingActionButton(
               onPressed: _addSubItem,
               child: const Icon(Icons.add),
             )
           : null,
+    );
+  }
+
+  Widget _buildPageViewLayout(List<String> months, NumberFormat fmt) {
+    return Column(
+      children: [
+        // Month indicator
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            '${_currentPage + 1} / ${months.length}',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.lightGrey,
+            ),
+          ),
+        ),
+        // Swipeable monthly ranges with navigation arrows
+        Expanded(
+          child: Stack(
+            children: [
+              PageView.builder(
+                controller: _pageController,
+                itemCount: months.length,
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentPage = index;
+                  });
+                },
+                itemBuilder: (context, index) {
+                  final key = months[index];
+                  return _buildMonthCard(key, fmt);
+                },
+              ),
+              // Left arrow
+              if (_currentPage > 0)
+                Positioned(
+                  left: 8,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.slate.withValues(alpha: 0.9),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.chevron_left,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          _pageController.previousPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              // Right arrow
+              if (_currentPage < months.length - 1)
+                Positioned(
+                  right: 8,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.slate.withValues(alpha: 0.9),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.chevron_right,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildListViewLayout(List<String> months, NumberFormat fmt) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: months.length,
+      itemBuilder: (context, index) {
+        final key = months[index];
+        final map = _budget.checklist[key] ?? {};
+        final checked = map[_item.id] == true;
+
+        // label: frequency + base amount or overridden amount for month
+        final overriddenAmount = _budget.monthItemAmountOverrides[key]?[_item.id];
+        String label = '';
+        final displayAmount = overriddenAmount ?? _item.amount ?? 0;
+        if (_item.frequency == 'monthly') {
+          label = 'Monthly: ${fmt.format(displayAmount)} Rwf';
+        } else if (_item.frequency == 'weekly') {
+          label = 'Weekly: ${fmt.format(displayAmount)} Rwf';
+        } else if (_item.frequency == 'once') {
+          label = 'One-time: ${fmt.format(displayAmount)} Rwf';
+        }
+
+        // show start/override date if present
+        final overrideDateStr = _budget.monthItemOverrides[key]?[_item.id];
+
+        String rangeLabel = _budget.monthRangeLabel(key);
+        // Only show the list tile if the range label is valid (not empty)
+        if (rangeLabel.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              title: Text(rangeLabel),
+              subtitle: Text(label),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Edit amount/date for this month',
+                    icon: const Icon(Icons.edit, color: Colors.white),
+                    onPressed: () async {
+                      await _editMonthOverride(key, overriddenAmount, overrideDateStr);
+                    },
+                  ),
+                  Checkbox(
+                    value: checked,
+                    onChanged: (v) {
+                      setState(() {
+                        final newMap = _budget.checklist[key] ?? {};
+                        newMap[_item.id] = v == true;
+                        _budget.checklist[key] = newMap;
+                      });
+                      widget.onChanged?.call(_budget);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            if (index < months.length - 1) const Divider(),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _editMonthOverride(
+    String monthKey,
+    double? overriddenAmount,
+    String? overrideDateStr,
+  ) async {
+    final amountCtrl = TextEditingController(
+      text: (overriddenAmount ?? _item.amount ?? 0).toStringAsFixed(0),
+    );
+    DateTime? initialDate;
+    try {
+      if (overrideDateStr != null) {
+        initialDate = DateTime.parse(overrideDateStr);
+      } else if (_item.startDate != null) {
+        initialDate = DateTime.parse(_item.startDate!);
+      }
+    } catch (_) {
+      initialDate = null;
+    }
+
+    await showDialog<DateTime?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit month override'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amountCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Amount (Rwf)',
+              ),
+              keyboardType: TextInputType.number,
+              inputFormatters: [ThousandsFormatter()],
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final now = DateTime.now();
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate: initialDate ?? now,
+                  firstDate: DateTime(
+                    _budget.start.year - 1,
+                  ),
+                  lastDate: DateTime(
+                    _budget.end.year + 1,
+                  ),
+                );
+                if (d != null) {
+                  initialDate = d;
+                }
+              },
+              icon: const Icon(Icons.calendar_today),
+              label: Text(
+                initialDate == null
+                    ? 'Pick date'
+                    : DateFormat('yyyy-MM-dd').format(initialDate!),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // parse amount
+              final parsed = double.tryParse(
+                    amountCtrl.text.replaceAll(RegExp(r'[^\d]'), ''),
+                  ) ??
+                  0.0;
+              // apply overrides
+              setState(() {
+                // amount override
+                final amounts = _budget.monthItemAmountOverrides[monthKey] ?? {};
+                amounts[_item.id] = parsed;
+                _budget.monthItemAmountOverrides[monthKey] = amounts;
+                // date override
+                if (initialDate != null) {
+                  final dates = _budget.monthItemOverrides[monthKey] ?? {};
+                  dates[_item.id] = DateFormat('yyyy-MM-dd').format(initialDate!);
+                  _budget.monthItemOverrides[monthKey] = dates;
+                }
+              });
+              // persist
+              Storage.updateBudget(_budget);
+              widget.onChanged?.call(_budget);
+              Navigator.of(ctx).pop(initialDate);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -436,9 +749,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 final nextDate = DateTime(year, month + 1, 1);
                 final nextKey =
                     '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+                final isLast = keys.isNotEmpty && key == keys.last;
                 DateTime rangeEnd;
 
-                final isLast = keys.isNotEmpty && key == keys.last;
                 if (isLast) {
                   rangeEnd = _budget.end;
                 } else {
@@ -446,8 +759,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   rangeEnd = nextSalary.subtract(const Duration(days: 1));
                 }
 
-                // Check if the start date falls within this month's range
-                if (!startDate.isBefore(rangeStart) && !startDate.isAfter(rangeEnd)) {
+                // Check if start date falls within this month's salary range
+                if (!startDate.isBefore(rangeStart) &&
+                    !startDate.isAfter(rangeEnd)) {
                   monthKey = key;
                   break;
                 }
@@ -464,14 +778,20 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           }
         }
       });
+
+      // Save to storage
       await Storage.addSubItem(_item.id, subItemToAdd);
-      // Save the budget to persist checklist changes
-      await Storage.updateBudget(_budget);
+
       // Update budget item in the main budget
-      final itemIndex = _budget.items.indexWhere((item) => item.id == _item.id);
+      final itemIndex = _budget.items.indexWhere(
+        (item) => item.id == _item.id,
+      );
       if (itemIndex != -1) {
         _budget.items[itemIndex] = _item;
       }
+
+      // Save the budget to persist checklist changes if any were made
+      await Storage.updateBudget(_budget);
       widget.onChanged?.call(_budget);
     }
   }
@@ -483,34 +803,24 @@ class ThousandsFormatter extends TextInputFormatter {
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    // Remove any non-digit characters except decimal point for parsing purposes
-    String newText = newValue.text.replaceAll(RegExp(r'[^0-9.]'), '');
-
-    if (newText.isEmpty) {
+    if (newValue.text.isEmpty) {
       return newValue.copyWith(text: '');
     }
 
-    // Handle decimal numbers
-    List<String> parts = newText.split('.');
-    String integerPart = parts[0];
-    String decimalPart = parts.length > 1 ? parts[1] : '';
+    // Remove all non-digit characters
+    final numericValue = newValue.text.replaceAll(RegExp(r'[^\d]'), '');
 
-    // Only format the integer part with thousands separators
-    if (integerPart.isNotEmpty) {
-      int? integerNum = int.tryParse(integerPart);
-      if (integerNum != null) {
-        String formattedInteger = NumberFormat('#,###').format(integerNum);
-        String formattedText = decimalPart.isNotEmpty
-            ? '$formattedInteger.$decimalPart'
-            : formattedInteger;
-
-        return newValue.copyWith(
-          text: formattedText,
-          selection: TextSelection.collapsed(offset: formattedText.length),
-        );
-      }
+    if (numericValue.isEmpty) {
+      return newValue.copyWith(text: '');
     }
 
-    return oldValue;
+    // Format with thousand separators
+    final formatter = NumberFormat('#,###');
+    final formattedValue = formatter.format(int.parse(numericValue));
+
+    return TextEditingValue(
+      text: formattedValue,
+      selection: TextSelection.collapsed(offset: formattedValue.length),
+    );
   }
 }

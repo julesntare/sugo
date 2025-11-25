@@ -203,7 +203,7 @@ class _SubItemsListState extends State<SubItemsList> {
                         ),
                       ),
                       Text(
-                        'Remaining: ${NumberFormat('#,###').format(remainingAmount)} Rwf',
+                        '${widget.budget.isMonthlyRangeEnded(widget.monthKey) ? "Transferred" : "Remaining"}: ${NumberFormat('#,###').format(remainingAmount)} Rwf',
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
