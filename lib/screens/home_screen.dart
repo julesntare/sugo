@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import '../models/budget.dart';
 import '../services/storage.dart';
 import '../services/backup_service.dart';
+import '../services/firestore_sync_service.dart';
 import '../widgets/app_theme.dart';
 import '../widgets/budget_card.dart';
 import '../widgets/create_budget_dialog.dart';
@@ -25,6 +27,55 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadBudgets();
     _checkAutoBackup();
+    _syncFirestoreData();
+  }
+
+  Future<void> _syncFirestoreData() async {
+    // Show toast that sync is in progress
+    Fluttertoast.showToast(
+      msg: "Syncing Firestore data...",
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.blue,
+      textColor: Colors.white,
+    );
+
+    // Wait for budgets to load first
+    while (_isLoading) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    // If no budgets exist, skip sync
+    if (_budgets.isEmpty) {
+      Fluttertoast.showToast(
+        msg: "No budgets found",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.orange,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    // Sync each budget (or just the first one if you prefer)
+    // For now, syncing all budgets
+    for (final budget in _budgets) {
+      final result = await FirestoreSyncService.syncDailyTotals(budget);
+
+      // Show result toast
+      Fluttertoast.showToast(
+        msg: result,
+        toastLength: Toast.LENGTH_LONG,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: result.startsWith('Sync') || result.startsWith('Updated')
+            ? Colors.green
+            : Colors.grey,
+        textColor: Colors.white,
+      );
+    }
+
+    // Reload budgets to reflect changes
+    await _loadBudgets();
   }
 
   Future<void> _checkAutoBackup() async {
