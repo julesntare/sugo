@@ -46,7 +46,11 @@ class _SubItemDialogState extends State<SubItemDialog> {
     super.initState();
     if (widget.subItem != null) {
       _nameCtrl.text = widget.subItem!.name;
-      _amountCtrl.text = NumberFormat('#,###').format(widget.subItem!.amount);
+      // Clean any newlines or whitespace from the amount before formatting
+      final cleanAmount = widget.subItem!.amount;
+      _amountCtrl.text = NumberFormat(
+        '#,###',
+      ).format(cleanAmount).replaceAll(RegExp(r'[\n\r\t]'), '');
       _descriptionCtrl.text = widget.subItem!.description ?? '';
       _frequency = widget.subItem!.frequency;
       if (widget.subItem!.startDate != null) {

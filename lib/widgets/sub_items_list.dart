@@ -173,9 +173,7 @@ class _SubItemsListState extends State<SubItemsList> {
                       const Text('Budget:'),
                       Text(
                         '${NumberFormat('#,###').format(widget.totalAmount)} Rwf',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -213,7 +211,10 @@ class _SubItemsListState extends State<SubItemsList> {
                   ),
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: getProgressBackgroundColor(),
                       borderRadius: BorderRadius.circular(12),
@@ -259,9 +260,7 @@ class _SubItemsListState extends State<SubItemsList> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                children: [
-                  _buildSubItemsList(),
-                ],
+                children: [_buildSubItemsList()],
               )
             else
               const Padding(
@@ -307,7 +306,7 @@ class _SubItemsListState extends State<SubItemsList> {
               style: const TextStyle(color: Colors.white),
             ),
             subtitle: Text(
-              '${NumberFormat('#,###').format(subItem.amount)} Rwf${subItem.description != null ? '\\n${subItem.description!}' : ''}',
+              '${NumberFormat('#,###').format(subItem.amount)} Rwf${subItem.description != null ? '\n${subItem.description!}' : ''}',
               style: TextStyle(color: AppColors.lightGrey),
             ),
             value:
@@ -316,13 +315,12 @@ class _SubItemsListState extends State<SubItemsList> {
                     true,
             onChanged: (value) {
               // Toggle based on current checklist state, not the checkbox value
-              final checklistKey = 'subitem_${widget.parentItemId}_${subItem.id}';
+              final checklistKey =
+                  'subitem_${widget.parentItemId}_${subItem.id}';
               final currentValue = widget.checklist?[checklistKey] ?? false;
               final newValue = !currentValue;
 
-              final updatedSubItem = subItem.copyWith(
-                isCompleted: newValue,
-              );
+              final updatedSubItem = subItem.copyWith(isCompleted: newValue);
               widget.onToggleCompleted(updatedSubItem, widget.monthKey);
             },
             secondary: PopupMenuButton(

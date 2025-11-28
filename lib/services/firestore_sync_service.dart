@@ -31,7 +31,18 @@ class FirestoreSyncService {
         return 'Invalid data structure';
       }
 
-      final total = (data['total'] as num).toDouble();
+      // Parse total amount, cleaning any unexpected string values
+      double total;
+      final totalValue = data['total'];
+      if (totalValue is num) {
+        total = totalValue.toDouble();
+      } else if (totalValue is String) {
+        // Clean any newlines, whitespace, or text from string values
+        final cleanValue = totalValue.replaceAll(RegExp(r'[\n\r\t\s,]'), '');
+        total = double.tryParse(cleanValue) ?? 0.0;
+      } else {
+        total = 0.0;
+      }
 
       // Find the misc item (item with hasSubItems = true)
       final miscItem = budget.items.firstWhere(
