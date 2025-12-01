@@ -95,11 +95,105 @@ class _SubItemsListState extends State<SubItemsList> {
     }
   }
 
+  // Helper method to parse date from sub-item name if it's in date format
+  // Expects format like "25th nov 25 misc" or "26th Nov 35 misc"
+  DateTime? _parseDateFromName(String name) {
+    try {
+      // Convert to lowercase for case-insensitive parsing
+      final lowerName = name.toLowerCase();
+
+      // Remove "misc" and ordinal suffixes (st, nd, rd, th) using callback
+      final cleaned = lowerName
+          .replaceAll('misc', '')
+          .replaceAllMapped(
+            RegExp(r'(\d+)(st|nd|rd|th)'),
+            (match) => match.group(1)!,
+          )
+          .trim();
+
+      // Split by whitespace and filter out empty strings
+      final parts = cleaned.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+
+      if (parts.length >= 3) {
+        // Extract day, month, year
+        final day = int.tryParse(parts[0]);
+        final monthStr = parts[1];
+        final yearStr = parts[2];
+
+        if (day != null) {
+          // Parse month
+          final monthMap = {
+            'jan': 1, 'january': 1,
+            'feb': 2, 'february': 2,
+            'mar': 3, 'march': 3,
+            'apr': 4, 'april': 4,
+            'may': 5,
+            'jun': 6, 'june': 6,
+            'jul': 7, 'july': 7,
+            'aug': 8, 'august': 8,
+            'sep': 9, 'september': 9,
+            'oct': 10, 'october': 10,
+            'nov': 11, 'november': 11,
+            'dec': 12, 'december': 12,
+          };
+
+          final month = monthMap[monthStr];
+          if (month != null) {
+            // Parse year (handle 2-digit years)
+            int? year = int.tryParse(yearStr);
+            if (year != null) {
+              if (year < 100) {
+                year += 2000; // Convert 25 to 2025
+              }
+              return DateTime(year, month, day);
+            }
+          }
+        }
+      }
+    } catch (_) {
+      // Parsing failed, return null
+    }
+    return null;
+  }
+
   // Helper method to get filtered sub-items
   List<SubItem> _getFilteredSubItems() {
-    return widget.subItems
+    final filtered = widget.subItems
         .where((subItem) => _subItemAppliesInMonth(subItem, widget.monthKey))
         .toList();
+
+    // Sort the filtered sub-items
+    filtered.sort((a, b) {
+      // Try to parse dates from names
+      final aDateFromName = _parseDateFromName(a.name);
+      final bDateFromName = _parseDateFromName(b.name);
+
+      // If both have valid date names, sort by the date in the name (latest first)
+      if (aDateFromName != null && bDateFromName != null) {
+        return bDateFromName.compareTo(aDateFromName);
+      }
+
+      // If only one has a valid date name, prioritize it
+      if (aDateFromName != null) return -1;
+      if (bDateFromName != null) return 1;
+
+      // Otherwise, sort by startDate descending (latest first)
+      final aDate = a.startDate;
+      final bDate = b.startDate;
+
+      if (aDate != null && bDate != null) {
+        return bDate.compareTo(aDate);
+      }
+
+      // If one has a date and the other doesn't, prioritize the one with a date
+      if (aDate != null) return -1;
+      if (bDate != null) return 1;
+
+      // If no dates available, maintain original order
+      return 0;
+    });
+
+    return filtered;
   }
 
   @override
