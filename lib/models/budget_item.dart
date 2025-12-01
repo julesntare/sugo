@@ -86,12 +86,12 @@ class BudgetItem {
     name: json['name'] as String,
     frequency: json['frequency'] as String? ?? 'once',
     amount: (json['amount'] as num?)?.toDouble(),
-    startDate: json['startDate'] as String?,
+    startDate: json['start_date'] as String?,
     hasSubItems: json['has_sub_items'] as bool? ?? false,
     subItems:
         (json['subItems'] as List<dynamic>?)
             ?.map((e) => SubItem.fromJson(e as Map<String, dynamic>))
-            .toList() ?? 
+            .toList() ??
         <SubItem>[],
   );
 }
