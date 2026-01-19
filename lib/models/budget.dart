@@ -115,14 +115,18 @@ class Budget {
   }
 
   /// Compute expected deductions for a given month key (YYYY-MM)
+  /// Note: Saving items are excluded from deductions
   double deductionsForMonth(String monthKey) {
     // Get checklist for the month
     final monthChecks = checklist[monthKey];
     if (monthChecks == null) return 0.0;
 
-    // Sum deductions for all items
+    // Sum deductions for all items (excluding savings)
     double total = 0.0;
     for (final it in items) {
+      // Skip saving items - they don't count as deductions
+      if (it.isSaving) continue;
+
       // For items with sub-items, calculate deductions based on checked sub-items
       // even if the parent item has no amount or is not checked
       if (it.hasSubItems && it.subItems.isNotEmpty) {
@@ -135,6 +139,42 @@ class Budget {
           total += baseDeduction;
         }
       }
+    }
+    return total;
+  }
+
+  /// Compute total savings for a given month key (YYYY-MM)
+  /// Only counts items marked as isSaving that are checked
+  double totalSavingsForMonth(String monthKey) {
+    final monthChecks = checklist[monthKey];
+    if (monthChecks == null) return 0.0;
+
+    double total = 0.0;
+    for (final it in items) {
+      // Only count saving items
+      if (!it.isSaving) continue;
+
+      if (it.hasSubItems && it.subItems.isNotEmpty) {
+        final subItemsTotal = subItemTotalForMonthInChecklist(it.id, monthKey);
+        total += subItemsTotal;
+      } else {
+        final baseAmount = _deductionForItemInMonth(it, monthKey);
+        if (baseAmount > 0.0 && monthChecks[it.id] == true) {
+          total += baseAmount;
+        }
+      }
+    }
+    return total;
+  }
+
+  /// Total savings accumulated up to and including monthKey
+  double totalSavingsUpTo(String monthKey) {
+    final keys = monthKeys();
+    double total = 0.0;
+
+    for (final k in keys) {
+      total += totalSavingsForMonth(k);
+      if (k == monthKey) break;
     }
     return total;
   }

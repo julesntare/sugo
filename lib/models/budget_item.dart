@@ -16,6 +16,10 @@ class BudgetItem {
   /// Whether this budget item supports sub-items
   final bool hasSubItems;
 
+  /// Whether this item is a saving (retained money) rather than an expense (consumed money)
+  /// Savings are not deducted from the budget but tracked separately
+  final bool isSaving;
+
   /// List of sub-items for this budget item
   List<SubItem> subItems;
 
@@ -26,6 +30,7 @@ class BudgetItem {
     this.amount,
     this.startDate,
     this.hasSubItems = false,
+    this.isSaving = false,
     List<SubItem>? subItems,
   }) : subItems = List<SubItem>.from(subItems ?? <SubItem>[]);
 
@@ -36,6 +41,7 @@ class BudgetItem {
     double? amount,
     String? startDate,
     bool? hasSubItems,
+    bool? isSaving,
     List<SubItem>? subItems,
   }) {
     return BudgetItem(
@@ -45,6 +51,7 @@ class BudgetItem {
       amount: amount ?? this.amount,
       startDate: startDate ?? this.startDate,
       hasSubItems: hasSubItems ?? this.hasSubItems,
+      isSaving: isSaving ?? this.isSaving,
       subItems: subItems ?? this.subItems,
     );
   }
@@ -57,6 +64,7 @@ class BudgetItem {
     'amount': amount,
     'start_date': startDate,
     'has_sub_items': hasSubItems ? 1 : 0,
+    'is_saving': isSaving ? 1 : 0,
   };
 
   // Create from SQLite row
@@ -67,6 +75,7 @@ class BudgetItem {
     amount: (map['amount'] as num?)?.toDouble(),
     startDate: map['start_date'] as String?,
     hasSubItems: (map['has_sub_items'] as int?) == 1,
+    isSaving: (map['is_saving'] as int?) == 1,
     subItems: [], // Sub-items will be loaded separately
   );
 
@@ -78,6 +87,7 @@ class BudgetItem {
     'amount': amount,
     'start_date': startDate,
     'has_sub_items': hasSubItems,
+    'is_saving': isSaving,
     'subItems': subItems.map((e) => e.toJson()).toList(),
   };
 
@@ -88,6 +98,7 @@ class BudgetItem {
     amount: (json['amount'] as num?)?.toDouble(),
     startDate: json['start_date'] as String?,
     hasSubItems: json['has_sub_items'] as bool? ?? false,
+    isSaving: json['is_saving'] as bool? ?? false,
     subItems:
         (json['subItems'] as List<dynamic>?)
             ?.map((e) => SubItem.fromJson(e as Map<String, dynamic>))

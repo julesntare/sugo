@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import '../models/budget.dart';
 import '../services/storage.dart';
 import '../services/backup_service.dart';
-import '../services/firestore_sync_service.dart';
 import '../widgets/app_theme.dart';
 import '../widgets/budget_card.dart';
 import '../widgets/create_budget_dialog.dart';
@@ -27,55 +25,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadBudgets();
     _checkAutoBackup();
-    _syncFirestoreData();
-  }
-
-  Future<void> _syncFirestoreData() async {
-    // Show toast that sync is in progress
-    Fluttertoast.showToast(
-      msg: "Syncing Firestore data...",
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.blue,
-      textColor: Colors.white,
-    );
-
-    // Wait for budgets to load first
-    while (_isLoading) {
-      await Future.delayed(const Duration(milliseconds: 100));
-    }
-
-    // If no budgets exist, skip sync
-    if (_budgets.isEmpty) {
-      Fluttertoast.showToast(
-        msg: "No budgets found",
-        toastLength: Toast.LENGTH_SHORT,
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.orange,
-        textColor: Colors.white,
-      );
-      return;
-    }
-
-    // Sync each budget (or just the first one if you prefer)
-    // For now, syncing all budgets
-    for (final budget in _budgets) {
-      final result = await FirestoreSyncService.syncDailyTotals(budget);
-
-      // Show result toast
-      Fluttertoast.showToast(
-        msg: result,
-        toastLength: Toast.LENGTH_LONG,
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: result.startsWith('Sync') || result.startsWith('Updated')
-            ? Colors.green
-            : Colors.grey,
-        textColor: Colors.white,
-      );
-    }
-
-    // Reload budgets to reflect changes
-    await _loadBudgets();
   }
 
   Future<void> _checkAutoBackup() async {
@@ -298,6 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final fmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
     double totalBudget = 0;
     double totalRemaining = 0;
+    double totalSaved = 0;
     int activeCount = 0;
 
     final now = DateTime.now();
@@ -318,6 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
         keyForRemaining = keys.isNotEmpty ? keys.last : nowKey;
       }
       totalRemaining += budget.remainingUpTo(keyForRemaining);
+      totalSaved += budget.totalSavingsUpTo(keyForRemaining);
     }
 
     return Card(
@@ -359,6 +310,31 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
+            if (totalSaved > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.teal.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.savings, size: 18, color: Colors.teal),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Total Saved: ${fmt.format(totalSaved)} Rwf',
+                      style: const TextStyle(
+                        color: Colors.teal,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const Divider(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

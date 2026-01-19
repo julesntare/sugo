@@ -23,6 +23,7 @@ Future<void> showEditItemDialog(
     }
   }
   bool enableSubItems = item.hasSubItems; // Track sub-items toggle state
+  bool isSaving = item.isSaving; // Track saving toggle state
   final numberFormat = NumberFormat('#,###');
 
   await showDialog<void>(
@@ -116,6 +117,27 @@ Future<void> showEditItemDialog(
                   ),
                 ),
               const SizedBox(height: 8),
+              // Add toggle for savings
+              SwitchListTile(
+                title: const Text('Mark as Savings'),
+                subtitle: Text(
+                  isSaving
+                      ? 'This amount will be tracked separately, not deducted from budget'
+                      : 'This is an expense that will be deducted from your budget',
+                  style: TextStyle(
+                    color: isSaving ? Colors.teal : Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+                value: isSaving,
+                activeTrackColor: Colors.teal.withValues(alpha: 0.5),
+                activeThumbColor: Colors.teal,
+                onChanged: (value) {
+                  dialogSetState(() {
+                    isSaving = value;
+                  });
+                },
+              ),
               // Add toggle for sub-items
               SwitchListTile(
                 title: const Text('Enable Sub-items'),
@@ -156,6 +178,7 @@ Future<void> showEditItemDialog(
                       ? null
                       : DateFormat('yyyy-MM-dd').format(startDate!),
                   hasSubItems: enableSubItems,
+                  isSaving: isSaving,
                   subItems: item.subItems, // PRESERVE existing sub-items!
                 );
 

@@ -61,6 +61,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
     final numberFormat = NumberFormat('#,###');
     String mode = 'once';
     bool enableSubItems = false;
+    bool isSaving = false;
     DateTime? startDate = DateTime.now();
 
     await showDialog<void>(
@@ -182,6 +183,26 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   SwitchListTile(
+                    title: const Text('Mark as Savings'),
+                    subtitle: Text(
+                      isSaving
+                          ? 'This amount will be tracked separately, not deducted from budget'
+                          : 'This is an expense that will be deducted from your budget',
+                      style: TextStyle(
+                        color: isSaving ? Colors.teal : AppColors.lightGrey,
+                        fontSize: 12,
+                      ),
+                    ),
+                    value: isSaving,
+                    activeTrackColor: Colors.teal.withValues(alpha: 0.5),
+                    activeThumbColor: Colors.teal,
+                    onChanged: (value) {
+                      dialogSetState(() {
+                        isSaving = value;
+                      });
+                    },
+                  ),
+                  SwitchListTile(
                     title: const Text('Enable Sub-items'),
                     subtitle: const Text('Allow adding detailed sub-items'),
                     value: enableSubItems,
@@ -226,6 +247,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                         ? null
                         : DateFormat('yyyy-MM-dd').format(startDate!),
                     hasSubItems: enableSubItems,
+                    isSaving: isSaving,
                   );
                   setState(() => _budget.items.add(item));
                   widget.onChanged?.call(_budget);
@@ -345,6 +367,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
     final keys = _budget.monthKeys();
     final monthlySalary = keys.isNotEmpty ? _budget.amount / keys.length : 0.0;
     final deductions = _budget.deductionsForMonth(key);
+    final savings = _budget.totalSavingsForMonth(key);
     final remaining = _budget.remainingForMonth(key);
     final monthLabel = _budget.monthRangeLabel(key);
     final monthItems = _budget.items
@@ -407,10 +430,34 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Salary: ${fmt.format(monthlySalary)} Rwf • Deductions: ${fmt.format(deductions)} Rwf • Remaining: ${fmt.format(remaining)} Rwf',
+                'Salary: ${fmt.format(monthlySalary)} Rwf • Expenses: ${fmt.format(deductions)} Rwf',
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: AppColors.lightGrey),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  if (savings > 0) ...[
+                    Icon(Icons.savings, size: 14, color: Colors.teal),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Saved: ${fmt.format(savings)} Rwf',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.teal,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Text(
+                    'Remaining: ${fmt.format(remaining)} Rwf',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: remaining >= 0 ? AppColors.lightGrey : AppColors.danger,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
               const Divider(),
               if (monthItems.isEmpty)
@@ -539,9 +586,21 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                                          now.isAfter(rangeEnd.subtract(const Duration(days: 7)));
 
                   return ListTile(
-                    title: Text(
-                      it.name,
-                      style: const TextStyle(color: Colors.white),
+                    title: Row(
+                      children: [
+                        if (it.isSaving) ...[
+                          const Icon(Icons.savings, size: 16, color: Colors.teal),
+                          const SizedBox(width: 6),
+                        ],
+                        Expanded(
+                          child: Text(
+                            it.name,
+                            style: TextStyle(
+                              color: it.isSaving ? Colors.teal : Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     subtitle: Text(
                       frequencyLabel,
@@ -1154,9 +1213,21 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                           child: Card(
                             color: AppColors.cardGrey,
                             child: ListTile(
-                              title: Text(
-                                it.name,
-                                style: const TextStyle(color: Colors.white),
+                              title: Row(
+                                children: [
+                                  if (it.isSaving) ...[
+                                    const Icon(Icons.savings, size: 16, color: Colors.teal),
+                                    const SizedBox(width: 6),
+                                  ],
+                                  Expanded(
+                                    child: Text(
+                                      it.name,
+                                      style: TextStyle(
+                                        color: it.isSaving ? Colors.teal : Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               subtitle: Text(
                                 label,

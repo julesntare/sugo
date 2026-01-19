@@ -20,10 +20,10 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    // bump database version to 2 to add frequency/start_date to budget_items
+    // bump database version to add new columns
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -49,6 +49,7 @@ class DatabaseHelper {
         amount REAL,
         start_date TEXT,
         has_sub_items INTEGER DEFAULT 0,
+        is_saving INTEGER DEFAULT 0,
         FOREIGN KEY (budget_id) REFERENCES budgets (id) ON DELETE CASCADE
       )
     ''');
@@ -119,6 +120,15 @@ class DatabaseHelper {
       // Add start_date column to existing sub_items table if it doesn't exist
       try {
         await db.execute('ALTER TABLE sub_items ADD COLUMN start_date TEXT');
+      } catch (_) {
+        // Column may already exist, ignore error
+      }
+    }
+
+    if (oldVersion < 6) {
+      // Add is_saving column to budget_items table for savings tracking
+      try {
+        await db.execute('ALTER TABLE budget_items ADD COLUMN is_saving INTEGER DEFAULT 0');
       } catch (_) {
         // Column may already exist, ignore error
       }
