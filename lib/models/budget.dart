@@ -31,6 +31,9 @@ class Budget {
   /// Track which misc items have been closed for each month: key YYYY-MM -> itemId -> closed
   final Map<String, Map<String, bool>> closedMiscItems;
 
+  /// Track transfers between items: key YYYY-MM -> fromItemId -> toItemId -> amount
+  final Map<String, Map<String, Map<String, double>>> itemTransfers;
+
   Budget({
     required this.id,
     required this.title,
@@ -45,6 +48,7 @@ class Budget {
     Map<String, Map<String, double>>? monthItemAmountOverridesParam,
     Map<String, Map<String, double>>? monthlyTransfers,
     Map<String, Map<String, bool>>? closedMiscItems,
+    Map<String, Map<String, Map<String, double>>>? itemTransfers,
   }) : items = List<BudgetItem>.from(items ?? <BudgetItem>[]),
        checklist = checklist ?? {},
        completionDates = completionDates ?? {},
@@ -52,7 +56,8 @@ class Budget {
        monthItemOverrides = monthItemOverridesParam ?? {},
        monthItemAmountOverrides = monthItemAmountOverridesParam ?? {},
        monthlyTransfers = monthlyTransfers ?? {},
-       closedMiscItems = closedMiscItems ?? {};
+       closedMiscItems = closedMiscItems ?? {},
+       itemTransfers = itemTransfers ?? {};
 
   // Convert Budget to Map for SQLite
   Map<String, dynamic> toMap() {
@@ -618,6 +623,70 @@ class Budget {
     return true;
   }
 
+  /// Transfer money from one item to another within a month
+  /// Deducts from source item's amount and adds to target item's amount
+  /// Returns true if successful, false otherwise
+  bool transferToItem(String fromItemId, String toItemId, double amount, String monthKey) {
+    if (amount <= 0) return false;
+    if (fromItemId == toItemId) return false;
+
+    final fromItem = items.firstWhere(
+      (it) => it.id == fromItemId,
+      orElse: () => BudgetItem(id: '', name: ''),
+    );
+    final toItem = items.firstWhere(
+      (it) => it.id == toItemId,
+      orElse: () => BudgetItem(id: '', name: ''),
+    );
+
+    if (fromItem.id.isEmpty || toItem.id.isEmpty) return false;
+
+    // Get current amounts for both items in this month
+    final fromCurrentAmount = monthItemAmountOverrides[monthKey]?[fromItemId] ?? fromItem.amount ?? 0.0;
+    final toCurrentAmount = monthItemAmountOverrides[monthKey]?[toItemId] ?? toItem.amount ?? 0.0;
+
+    // Can't transfer more than available
+    if (amount > fromCurrentAmount) return false;
+
+    // Update source item's amount (deduct)
+    final fromAmounts = monthItemAmountOverrides[monthKey] ?? {};
+    fromAmounts[fromItemId] = fromCurrentAmount - amount;
+    monthItemAmountOverrides[monthKey] = fromAmounts;
+
+    // Update target item's amount (add)
+    final toAmounts = monthItemAmountOverrides[monthKey] ?? {};
+    toAmounts[toItemId] = toCurrentAmount + amount;
+    monthItemAmountOverrides[monthKey] = toAmounts;
+
+    // Record the transfer
+    final monthTransfers = itemTransfers[monthKey] ?? {};
+    final fromTransfers = monthTransfers[fromItemId] ?? {};
+    final existingTransfer = fromTransfers[toItemId] ?? 0.0;
+    fromTransfers[toItemId] = existingTransfer + amount;
+    monthTransfers[fromItemId] = fromTransfers;
+    itemTransfers[monthKey] = monthTransfers;
+
+    return true;
+  }
+
+  /// Get total amount transferred from an item in a month
+  double totalTransferredFromItem(String itemId, String monthKey) {
+    final monthTransfers = itemTransfers[monthKey]?[itemId];
+    if (monthTransfers == null) return 0.0;
+    return monthTransfers.values.fold(0.0, (sum, amount) => sum + amount);
+  }
+
+  /// Get total amount transferred to an item in a month
+  double totalTransferredToItem(String itemId, String monthKey) {
+    final monthTransfers = itemTransfers[monthKey];
+    if (monthTransfers == null) return 0.0;
+    double total = 0.0;
+    for (final fromTransfers in monthTransfers.values) {
+      total += fromTransfers[itemId] ?? 0.0;
+    }
+    return total;
+  }
+
   /// Auto-close miscellaneous items when entering a new monthly range
   /// Should be called when loading a budget or navigating to a new month
   void autoCloseMiscItems() {
@@ -719,6 +788,7 @@ class Budget {
     'monthItemAmountOverrides': monthItemAmountOverrides,
     'monthlyTransfers': monthlyTransfers,
     'closedMiscItems': closedMiscItems,
+    'itemTransfers': itemTransfers,
   };
 
   factory Budget.fromJson(Map<String, dynamic> json) {
@@ -779,6 +849,20 @@ class Budget {
       closedMiscItems:
           (json['closedMiscItems'] as Map<String, dynamic>?)?.map(
             (k, v) => MapEntry(k, Map<String, bool>.from(v as Map)),
+          ),
+      itemTransfers:
+          (json['itemTransfers'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(
+              k,
+              (v as Map<String, dynamic>).map(
+                (ik, iv) => MapEntry(
+                  ik,
+                  (iv as Map<String, dynamic>).map(
+                    (tk, tv) => MapEntry(tk, (tv as num).toDouble()),
+                  ),
+                ),
+              ),
+            ),
           ),
     );
   }

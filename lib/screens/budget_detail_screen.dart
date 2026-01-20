@@ -617,6 +617,8 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                               _adjustItemAmount(it, key);
                             } else if (value == 'deduce') {
                               _deduceItemAmount(it, key);
+                            } else if (value == 'transfer') {
+                              _transferToItem(it, key);
                             }
                           },
                           itemBuilder: (context) => [
@@ -637,6 +639,16 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                                   Icon(Icons.remove_circle_outline, size: 18, color: AppColors.danger),
                                   SizedBox(width: 8),
                                   Text('Deduce (Subtract)', style: TextStyle(color: AppColors.danger)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'transfer',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.swap_horiz, size: 18, color: Colors.teal),
+                                  SizedBox(width: 8),
+                                  Text('Transfer to', style: TextStyle(color: Colors.teal)),
                                 ],
                               ),
                             ),
@@ -986,6 +998,142 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
             child: const Text('Subtract'),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _transferToItem(BudgetItem fromItem, String monthKey) async {
+    final controller = TextEditingController();
+    final numberFormat = NumberFormat('#,###');
+    final currentAmount = _budget.monthItemAmountOverrides[monthKey]?[fromItem.id] ?? fromItem.amount ?? 0.0;
+
+    // Get other items that can receive the transfer (exclude the source item)
+    final otherItems = _budget.items.where((it) => it.id != fromItem.id).toList();
+
+    if (otherItems.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No other items to transfer to'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+      }
+      return;
+    }
+
+    BudgetItem? selectedItem = otherItems.first;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, dialogSetState) => AlertDialog(
+          backgroundColor: AppColors.slate,
+          title: Text('Transfer from ${fromItem.name}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Available: ${numberFormat.format(currentAmount)} Rwf',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<BudgetItem>(
+                  initialValue: selectedItem,
+                  decoration: const InputDecoration(
+                    labelText: 'Transfer to',
+                    prefixIcon: Icon(Icons.arrow_forward, color: AppColors.lightGrey),
+                  ),
+                  items: otherItems.map((item) => DropdownMenuItem(
+                    value: item,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (item.isSaving) ...[
+                          const Icon(Icons.savings, size: 16, color: Colors.teal),
+                          const SizedBox(width: 6),
+                        ],
+                        Flexible(
+                          child: Text(
+                            item.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: item.isSaving ? Colors.teal : Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )).toList(),
+                  onChanged: (value) {
+                    dialogSetState(() {
+                      selectedItem = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    labelText: 'Amount to transfer',
+                    hintText: 'Enter amount',
+                    suffixText: 'Rwf',
+                    prefixIcon: Icon(Icons.swap_horiz, color: AppColors.lightGrey),
+                  ),
+                  keyboardType: TextInputType.number,
+                  onChanged: (value) {
+                    if (value.isEmpty) return;
+                    String cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                    if (cleanValue.isEmpty) return;
+                    int number = int.tryParse(cleanValue) ?? 0;
+                    final formatted = numberFormat.format(number);
+                    controller.value = TextEditingValue(
+                      text: formatted,
+                      selection: TextSelection.collapsed(offset: formatted.length),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+              onPressed: () {
+                if (selectedItem == null) return;
+                final cleanValue = controller.text.replaceAll(RegExp(r'[^\d]'), '');
+                final transferAmount = double.tryParse(cleanValue) ?? 0;
+                if (transferAmount > 0 && transferAmount <= currentAmount) {
+                  final success = _budget.transferToItem(
+                    fromItem.id,
+                    selectedItem!.id,
+                    transferAmount,
+                    monthKey,
+                  );
+                  if (success) {
+                    setState(() {});
+                    Storage.updateBudget(_budget);
+                    widget.onChanged?.call(_budget);
+                    Navigator.of(ctx).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Transferred ${numberFormat.format(transferAmount)} Rwf to ${selectedItem!.name}'),
+                        backgroundColor: Colors.teal,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Transfer'),
+            ),
+          ],
+        ),
       ),
     );
   }

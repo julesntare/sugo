@@ -52,6 +52,8 @@ class Storage {
       budget.closedMiscItems.addAll(await _loadClosedMiscItems(id));
       // Load completion dates
       budget.completionDates.addAll(await _loadCompletionDates(id));
+      // Load item transfers
+      budget.itemTransfers.addAll(await _loadItemTransfers(id));
 
       // Load sub-items for each budget item
       for (var item in budget.items) {
@@ -78,6 +80,8 @@ class Storage {
       budget.closedMiscItems.addAll(await _loadClosedMiscItems(budget.id));
       // Load completion dates
       budget.completionDates.addAll(await _loadCompletionDates(budget.id));
+      // Load item transfers
+      budget.itemTransfers.addAll(await _loadItemTransfers(budget.id));
 
       // Load sub-items for each budget item
       for (var item in budget.items) {
@@ -128,6 +132,7 @@ class Storage {
     await _saveMonthlyTransfers(budget.id, budget.monthlyTransfers);
     await _saveClosedMiscItems(budget.id, budget.closedMiscItems);
     await _saveCompletionDates(budget.id, budget.completionDates);
+    await _saveItemTransfers(budget.id, budget.itemTransfers);
   }
 
   /// Update sub-items for a budget item
@@ -407,6 +412,45 @@ class Storage {
     }
   }
 
+  static Future<void> _saveItemTransfers(
+    String budgetId,
+    Map<String, Map<String, Map<String, double>>> transfers,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      '${_salaryOverridesKey}_item_transfers_$budgetId',
+      jsonEncode(transfers),
+    );
+  }
+
+  static Future<Map<String, Map<String, Map<String, double>>>> _loadItemTransfers(
+    String budgetId,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(
+      '${_salaryOverridesKey}_item_transfers_$budgetId',
+    );
+    if (raw == null) return {};
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return map.map(
+        (k, v) => MapEntry(
+          k,
+          (v as Map<String, dynamic>).map(
+            (ik, iv) => MapEntry(
+              ik,
+              (iv as Map<String, dynamic>).map(
+                (tk, tv) => MapEntry(tk, (tv as num).toDouble()),
+              ),
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      return {};
+    }
+  }
+
   static Future<void> _deleteChecklist(String budgetId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('${_checklistKey}_$budgetId');
@@ -416,5 +460,6 @@ class Storage {
     await prefs.remove('${_salaryOverridesKey}_monthly_transfers_$budgetId');
     await prefs.remove('${_salaryOverridesKey}_closed_misc_items_$budgetId');
     await prefs.remove('${_salaryOverridesKey}_completion_dates_$budgetId');
+    await prefs.remove('${_salaryOverridesKey}_item_transfers_$budgetId');
   }
 }
