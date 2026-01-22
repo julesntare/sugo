@@ -135,8 +135,14 @@ class Budget {
       // For items with sub-items, calculate deductions based on checked sub-items
       // even if the parent item has no amount or is not checked
       if (it.hasSubItems && it.subItems.isNotEmpty) {
-        final subItemsTotal = subItemTotalForMonthInChecklist(it.id, monthKey);
-        total += subItemsTotal;
+        final baseDeduction = _deductionForItemInMonth(it, monthKey);
+        if (monthChecks[it.id] == true) {
+          total += baseDeduction;
+        } else {
+          final subItemsTotal =
+              subItemTotalForMonthInChecklist(it.id, monthKey);
+          total += subItemsTotal;
+        }
       } else {
         // For items without sub-items, only deduct if checked and has non-zero deduction
         final baseDeduction = _deductionForItemInMonth(it, monthKey);
@@ -160,8 +166,14 @@ class Budget {
       if (!it.isSaving) continue;
 
       if (it.hasSubItems && it.subItems.isNotEmpty) {
-        final subItemsTotal = subItemTotalForMonthInChecklist(it.id, monthKey);
-        total += subItemsTotal;
+        final baseAmount = _deductionForItemInMonth(it, monthKey);
+        if (monthChecks[it.id] == true) {
+          total += baseAmount;
+        } else {
+          final subItemsTotal =
+              subItemTotalForMonthInChecklist(it.id, monthKey);
+          total += subItemsTotal;
+        }
       } else {
         final baseAmount = _deductionForItemInMonth(it, monthKey);
         if (baseAmount > 0.0 && monthChecks[it.id] == true) {
@@ -562,18 +574,57 @@ class Budget {
     return remaining;
   }
 
+  /// Calculate the total funds for a specific month
+  /// This is the sum of all item amounts (with overrides) for this month
+  double fundsForMonth(String monthKey) {
+    double funds = 0.0;
+
+    for (final item in items) {
+      // Check if item applies to this month based on frequency and start date
+      final itemAmount = _getItemAmountForMonth(item, monthKey);
+      if (itemAmount > 0) {
+        // Use override if available, otherwise use calculated amount
+        funds += monthItemAmountOverrides[monthKey]?[item.id] ?? itemAmount;
+      }
+    }
+
+    return funds;
+  }
+
+  /// Helper to get item's applicable amount for a month
+  double _getItemAmountForMonth(BudgetItem item, String monthKey) {
+    return _deductionForItemInMonth(item, monthKey);
+  }
+
   /// Calculate the remaining amount for a specific month
-  /// This is the monthly salary allocation minus the deductions for that month
+  /// This is the sum of unspent money from all non-saving items
   double remainingForMonth(String monthKey) {
-    final keys = monthKeys();
-    if (keys.isEmpty) return 0.0;
+    final monthChecks = checklist[monthKey] ?? {};
+    double remaining = 0.0;
 
-    // Monthly salary = total budget / number of months
-    final monthlySalary = amount / keys.length;
+    for (final item in items) {
+      // Skip saving items - they're tracked separately
+      if (item.isSaving) continue;
 
-    // Remaining = monthly salary - deductions for this month
-    final deductions = deductionsForMonth(monthKey);
-    return monthlySalary - deductions;
+      // Get the item's amount for this month (with override if any)
+      final itemAmount = monthItemAmountOverrides[monthKey]?[item.id] ?? item.amount ?? 0.0;
+
+      // Calculate how much was spent from this item
+      if (item.hasSubItems && item.subItems.isNotEmpty) {
+        // For items with sub-items, spent = checked sub-items total
+        final spent = subItemTotalForMonthInChecklist(item.id, monthKey);
+        remaining += (itemAmount - spent);
+      } else {
+        // For regular items: if checked = fully spent, if not = fully remaining
+        final isChecked = monthChecks[item.id] == true;
+        if (!isChecked) {
+          remaining += itemAmount;
+        }
+        // If checked, remaining from this item is 0
+      }
+    }
+
+    return remaining;
   }
 
   /// Close a miscellaneous item for a specific month and transfer remaining amount to next month
@@ -619,6 +670,84 @@ class Budget {
     final checkMap = checklist[monthKey] ?? {};
     checkMap[itemId] = true;
     checklist[monthKey] = checkMap;
+
+    return true;
+  }
+
+  /// Reopen a closed miscellaneous item and roll back any transfer to next month
+  /// Returns true if successful, false otherwise
+  bool reopenMiscItem(String itemId, String monthKey) {
+    final item = items.firstWhere(
+      (it) => it.id == itemId,
+      orElse: () => BudgetItem(id: '', name: ''),
+    );
+
+    if (!item.hasSubItems || item.id.isEmpty) return false;
+
+    final keys = monthKeys();
+    final currentIndex = keys.indexOf(monthKey);
+    if (currentIndex == -1 || currentIndex >= keys.length - 1) return false;
+
+    final isClosed = closedMiscItems[monthKey]?[itemId] ?? false;
+    if (!isClosed) return false;
+
+    final nextMonthKey = keys[currentIndex + 1];
+    final transferAmount = monthlyTransfers[monthKey]?[itemId] ?? 0.0;
+
+    if (transferAmount > 0) {
+      final nextMonthAmounts = monthItemAmountOverrides[nextMonthKey] ?? {};
+      if (nextMonthAmounts.containsKey(itemId)) {
+        final currentNextAmount =
+            nextMonthAmounts[itemId] ?? item.amount ?? 0.0;
+        final updated = currentNextAmount - transferAmount;
+        final baseAmount = item.amount ?? 0.0;
+        const epsilon = 0.0001;
+        if ((updated - baseAmount).abs() < epsilon) {
+          nextMonthAmounts.remove(itemId);
+        } else {
+          nextMonthAmounts[itemId] = updated;
+        }
+        if (nextMonthAmounts.isEmpty) {
+          monthItemAmountOverrides.remove(nextMonthKey);
+        } else {
+          monthItemAmountOverrides[nextMonthKey] = nextMonthAmounts;
+        }
+      }
+    }
+
+    final transferMap = monthlyTransfers[monthKey] ?? {};
+    transferMap.remove(itemId);
+    if (transferMap.isEmpty) {
+      monthlyTransfers.remove(monthKey);
+    } else {
+      monthlyTransfers[monthKey] = transferMap;
+    }
+
+    final closedMap = closedMiscItems[monthKey] ?? {};
+    closedMap.remove(itemId);
+    if (closedMap.isEmpty) {
+      closedMiscItems.remove(monthKey);
+    } else {
+      closedMiscItems[monthKey] = closedMap;
+    }
+
+    final checkMap = checklist[monthKey] ?? {};
+    checkMap.remove(itemId);
+    if (checkMap.isEmpty) {
+      checklist.remove(monthKey);
+    } else {
+      checklist[monthKey] = checkMap;
+    }
+
+    final dateMap = completionDates[monthKey];
+    if (dateMap != null) {
+      dateMap.remove(itemId);
+      if (dateMap.isEmpty) {
+        completionDates.remove(monthKey);
+      } else {
+        completionDates[monthKey] = dateMap;
+      }
+    }
 
     return true;
   }
@@ -691,6 +820,7 @@ class Budget {
   /// Should be called when loading a budget or navigating to a new month
   void autoCloseMiscItems() {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final keys = monthKeys();
 
     for (int i = 0; i < keys.length - 1; i++) {
@@ -699,14 +829,13 @@ class Budget {
       final year = int.parse(parts[0]);
       final month = int.parse(parts[1]);
 
-      // Calculate range end for this month
+      // Calculate the start date of the next month's range
       final nextDate = DateTime(year, month + 1, 1);
       final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
       final nextSalary = salaryDateForMonth(nextKey);
-      final rangeEnd = nextSalary.subtract(const Duration(days: 1));
 
-      // If current date is past this month's range end, auto-close unclosed misc items
-      if (now.isAfter(rangeEnd)) {
+      // If current date is on or after the start of the next monthly range, auto-close unclosed misc items
+      if (!today.isBefore(nextSalary)) {
         for (final item in items) {
           if (item.hasSubItems) {
             final isClosed = closedMiscItems[monthKey]?[item.id] ?? false;
@@ -725,15 +854,20 @@ class Budget {
   /// If today is after the budget ends, returns the last month
   String currentActiveMonthKey() {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final keys = monthKeys();
 
     if (keys.isEmpty) return DateFormat('yyyy-MM').format(now);
 
     // If we're before the budget starts, return first month
-    if (now.isBefore(start)) return keys.first;
+    if (today.isBefore(DateTime(start.year, start.month, start.day))) {
+      return keys.first;
+    }
 
     // If we're after the budget ends, return last month
-    if (now.isAfter(end)) return keys.last;
+    if (today.isAfter(DateTime(end.year, end.month, end.day))) {
+      return keys.last;
+    }
 
     // Find which month range contains today
     for (int i = 0; i < keys.length; i++) {
@@ -764,8 +898,20 @@ class Budget {
         rangeEnd = nextSalary.subtract(const Duration(days: 1));
       }
 
+      final rangeStartDate = DateTime(
+        rangeStart.year,
+        rangeStart.month,
+        rangeStart.day,
+      );
+      final rangeEndDate = DateTime(
+        rangeEnd.year,
+        rangeEnd.month,
+        rangeEnd.day,
+      );
+
       // Check if today falls within this range (inclusive)
-      if (!now.isBefore(rangeStart) && !now.isAfter(rangeEnd)) {
+      if (!today.isBefore(rangeStartDate) &&
+          !today.isAfter(rangeEndDate)) {
         return monthKey;
       }
     }

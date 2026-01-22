@@ -364,8 +364,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
       }
     }
 
-    final keys = _budget.monthKeys();
-    final monthlySalary = keys.isNotEmpty ? _budget.amount / keys.length : 0.0;
+    final monthlyFunds = _budget.fundsForMonth(key);
     final deductions = _budget.deductionsForMonth(key);
     final savings = _budget.totalSavingsForMonth(key);
     final remaining = _budget.remainingForMonth(key);
@@ -430,7 +429,7 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Salary: ${fmt.format(monthlySalary)} Rwf • Expenses: ${fmt.format(deductions)} Rwf',
+                'Funds: ${fmt.format(monthlyFunds)} Rwf • Expenses: ${fmt.format(deductions)} Rwf',
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: AppColors.lightGrey),
@@ -453,7 +452,9 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                   Text(
                     'Remaining: ${fmt.format(remaining)} Rwf',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: remaining >= 0 ? AppColors.lightGrey : AppColors.danger,
+                      color: remaining >= 0
+                          ? AppColors.lightGrey
+                          : AppColors.danger,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -513,8 +514,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                   final checked = explicitlyChecked || isAutoChecked;
 
                   // Check if this misc item is closed
-                  final isClosed = _budget.closedMiscItems[key]?[it.id] ?? false;
-                  final transferredAmount = _budget.monthlyTransfers[key]?[it.id] ?? 0.0;
+                  final isClosed =
+                      _budget.closedMiscItems[key]?[it.id] ?? false;
+                  final transferredAmount =
+                      _budget.monthlyTransfers[key]?[it.id] ?? 0.0;
 
                   // Build frequency label
                   String frequencyLabel = '';
@@ -548,12 +551,17 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
 
                   // If closed, show transferred amount instead of remaining
                   if (isClosed && transferredAmount > 0) {
-                    frequencyLabel += '\nTransferred: ${fmt.format(transferredAmount)} Rwf';
+                    frequencyLabel +=
+                        '\nTransferred: ${fmt.format(transferredAmount)} Rwf';
                   } else if (it.hasSubItems && !isClosed) {
                     // Show remaining amount for unclosed misc items
-                    final remaining = _budget.remainingAmountForItemInMonth(it.id, key);
+                    final remaining = _budget.remainingAmountForItemInMonth(
+                      it.id,
+                      key,
+                    );
                     if (remaining != 0) {
-                      frequencyLabel += '\nRemaining: ${fmt.format(remaining)} Rwf';
+                      frequencyLabel +=
+                          '\nRemaining: ${fmt.format(remaining)} Rwf';
                     }
                   }
 
@@ -564,32 +572,31 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                   final year = int.parse(parts[0]);
                   final month = int.parse(parts[1]);
                   final nextDate = DateTime(year, month + 1, 1);
-                  final nextKey = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
+                  final nextKey =
+                      '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}';
                   final keys = _budget.monthKeys();
                   final isLast = keys.isNotEmpty && key == keys.last;
-                  DateTime rangeEnd;
+                  DateTime? nextSalary;
                   if (isLast) {
-                    rangeEnd = _budget.end;
                   } else {
-                    final nextSalary = _budget.salaryDateForMonth(nextKey);
-                    rangeEnd = nextSalary.subtract(const Duration(days: 1));
+                    nextSalary = _budget.salaryDateForMonth(nextKey);
                   }
 
-                  // Show close button if:
-                  // 1. Item has sub-items (is miscellaneous)
-                  // 2. Not already closed
-                  // 3. Not the last month
-                  // 4. Current date is on or near the range end (within 7 days)
-                  final showCloseButton = it.hasSubItems &&
-                                         !isClosed &&
-                                         !isLast &&
-                                         now.isAfter(rangeEnd.subtract(const Duration(days: 7)));
+                  final showCloseButton =
+                      it.hasSubItems &&
+                      !isClosed &&
+                      !isLast &&
+                      (nextSalary != null && !now.isBefore(nextSalary));
 
                   return ListTile(
                     title: Row(
                       children: [
                         if (it.isSaving) ...[
-                          const Icon(Icons.savings, size: 16, color: Colors.teal),
+                          const Icon(
+                            Icons.savings,
+                            size: 16,
+                            color: Colors.teal,
+                          ),
                           const SizedBox(width: 6),
                         ],
                         Expanded(
@@ -610,7 +617,11 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+                          icon: const Icon(
+                            Icons.more_vert,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                           tooltip: 'Item options',
                           onSelected: (value) {
                             if (value == 'adjust') {
@@ -636,9 +647,16 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                               value: 'deduce',
                               child: Row(
                                 children: [
-                                  Icon(Icons.remove_circle_outline, size: 18, color: AppColors.danger),
+                                  Icon(
+                                    Icons.remove_circle_outline,
+                                    size: 18,
+                                    color: AppColors.danger,
+                                  ),
                                   SizedBox(width: 8),
-                                  Text('Deduce (Subtract)', style: TextStyle(color: AppColors.danger)),
+                                  Text(
+                                    'Deduce (Subtract)',
+                                    style: TextStyle(color: AppColors.danger),
+                                  ),
                                 ],
                               ),
                             ),
@@ -646,9 +664,16 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                               value: 'transfer',
                               child: Row(
                                 children: [
-                                  Icon(Icons.swap_horiz, size: 18, color: Colors.teal),
+                                  Icon(
+                                    Icons.swap_horiz,
+                                    size: 18,
+                                    color: Colors.teal,
+                                  ),
                                   SizedBox(width: 8),
-                                  Text('Transfer to', style: TextStyle(color: Colors.teal)),
+                                  Text(
+                                    'Transfer to',
+                                    style: TextStyle(color: Colors.teal),
+                                  ),
                                 ],
                               ),
                             ),
@@ -656,8 +681,12 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                         ),
                         if (showCloseButton)
                           IconButton(
-                            icon: const Icon(Icons.check_circle_outline, color: AppColors.teal),
-                            tooltip: 'Close and transfer remaining to next month',
+                            icon: const Icon(
+                              Icons.check_circle_outline,
+                              color: AppColors.teal,
+                            ),
+                            tooltip:
+                                'Close and transfer remaining to next month',
                             onPressed: () async {
                               final success = _budget.closeMiscItem(it.id, key);
                               if (success) {
@@ -667,7 +696,9 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('${it.name} closed and remaining transferred to next month'),
+                                      content: Text(
+                                        '${it.name} closed and remaining transferred to next month',
+                                      ),
                                       backgroundColor: AppColors.teal,
                                     ),
                                   );
@@ -676,91 +707,91 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                             },
                           ),
                         Checkbox(
-                      value: checked,
-                      fillColor: WidgetStateProperty.resolveWith<Color>((
-                        states,
-                      ) {
-                        if (explicitlyChecked) {
-                          // Explicitly checked - use primary color
-                          return Theme.of(context).colorScheme.primary;
-                        }
-                        if (isAutoChecked) {
-                          // Auto-checked from sub-items
-                          if (isBudgetExceeded) {
-                            // Budget exceeded - use danger/red color
-                            return AppColors.danger;
-                          }
-                          // Has completed sub-items, budget not exceeded - use warning/orange color
-                          // This persists until next monthly range starts
-                          return AppColors.warning;
-                        }
-                        // Unchecked - transparent
-                        return Colors.transparent;
-                      }),
-                      checkColor: Colors.white,
-                      onChanged: (v) async {
-                        if (v == true) {
-                          // If clicking to check (from unchecked or partial state)
-                          // Show date picker when marking as completed
-                          final now = DateTime.now();
-                          // Ensure initialDate is within the valid range
-                          final initialDate = now.isBefore(rangeStartDate)
-                              ? rangeStartDate
-                              : now;
-
-                          final selectedDate = await showDatePicker(
-                            context: context,
-                            initialDate: initialDate,
-                            firstDate: rangeStartDate,
-                            lastDate: DateTime.now().add(
-                              const Duration(days: 365),
-                            ),
-                            helpText: 'Select completion date',
-                          );
-
-                          if (selectedDate != null) {
-                            setState(() {
-                              // Mark as explicitly checked
-                              final checkMap = _budget.checklist[key] ?? {};
-                              checkMap[it.id] = true;
-                              _budget.checklist[key] = checkMap;
-
-                              // Record completion date
-                              final dateMap =
-                                  _budget.completionDates[key] ?? {};
-                              dateMap[it.id] = DateFormat(
-                                'yyyy-MM-dd',
-                              ).format(selectedDate);
-                              _budget.completionDates[key] = dateMap;
-                            });
-                            await Storage.updateBudget(_budget);
-                            widget.onChanged?.call(_budget);
-                          }
-                        } else {
-                          // Unchecking - only uncheck if it was explicitly checked
-                          // If it's only partially checked (from sub-items), this does nothing
-                          if (explicitlyChecked) {
-                            setState(() {
-                              final checkMap = _budget.checklist[key] ?? {};
-                              checkMap[it.id] = false;
-                              _budget.checklist[key] = checkMap;
-
-                              // Remove completion date
-                              final dateMap =
-                                  _budget.completionDates[key] ?? {};
-                              dateMap.remove(it.id);
-                              if (dateMap.isNotEmpty) {
-                                _budget.completionDates[key] = dateMap;
-                              } else {
-                                _budget.completionDates.remove(key);
+                          value: checked,
+                          fillColor: WidgetStateProperty.resolveWith<Color>((
+                            states,
+                          ) {
+                            if (explicitlyChecked) {
+                              // Explicitly checked - use primary color
+                              return Theme.of(context).colorScheme.primary;
+                            }
+                            if (isAutoChecked) {
+                              // Auto-checked from sub-items
+                              if (isBudgetExceeded) {
+                                // Budget exceeded - use danger/red color
+                                return AppColors.danger;
                               }
-                            });
-                            await Storage.updateBudget(_budget);
-                            widget.onChanged?.call(_budget);
-                          }
-                          // If only partially checked, user must go to sub-items to uncheck
-                        }
-                      },
+                              // Has completed sub-items, budget not exceeded - use warning/orange color
+                              // This persists until next monthly range starts
+                              return AppColors.warning;
+                            }
+                            // Unchecked - transparent
+                            return Colors.transparent;
+                          }),
+                          checkColor: Colors.white,
+                          onChanged: (v) async {
+                            if (v == true) {
+                              // If clicking to check (from unchecked or partial state)
+                              // Show date picker when marking as completed
+                              final now = DateTime.now();
+                              // Ensure initialDate is within the valid range
+                              final initialDate = now.isBefore(rangeStartDate)
+                                  ? rangeStartDate
+                                  : now;
+
+                              final selectedDate = await showDatePicker(
+                                context: context,
+                                initialDate: initialDate,
+                                firstDate: rangeStartDate,
+                                lastDate: DateTime.now().add(
+                                  const Duration(days: 365),
+                                ),
+                                helpText: 'Select completion date',
+                              );
+
+                              if (selectedDate != null) {
+                                setState(() {
+                                  // Mark as explicitly checked
+                                  final checkMap = _budget.checklist[key] ?? {};
+                                  checkMap[it.id] = true;
+                                  _budget.checklist[key] = checkMap;
+
+                                  // Record completion date
+                                  final dateMap =
+                                      _budget.completionDates[key] ?? {};
+                                  dateMap[it.id] = DateFormat(
+                                    'yyyy-MM-dd',
+                                  ).format(selectedDate);
+                                  _budget.completionDates[key] = dateMap;
+                                });
+                                await Storage.updateBudget(_budget);
+                                widget.onChanged?.call(_budget);
+                              }
+                            } else {
+                              // Unchecking - only uncheck if it was explicitly checked
+                              // If it's only partially checked (from sub-items), this does nothing
+                              if (explicitlyChecked) {
+                                setState(() {
+                                  final checkMap = _budget.checklist[key] ?? {};
+                                  checkMap[it.id] = false;
+                                  _budget.checklist[key] = checkMap;
+
+                                  // Remove completion date
+                                  final dateMap =
+                                      _budget.completionDates[key] ?? {};
+                                  dateMap.remove(it.id);
+                                  if (dateMap.isNotEmpty) {
+                                    _budget.completionDates[key] = dateMap;
+                                  } else {
+                                    _budget.completionDates.remove(key);
+                                  }
+                                });
+                                await Storage.updateBudget(_budget);
+                                widget.onChanged?.call(_budget);
+                              }
+                              // If only partially checked, user must go to sub-items to uncheck
+                            }
+                          },
                         ),
                       ],
                     ),
@@ -833,7 +864,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              final cleanValue = controller.text.replaceAll(RegExp(r'[^\d]'), '');
+              final cleanValue = controller.text.replaceAll(
+                RegExp(r'[^\d]'),
+                '',
+              );
               final adjustment = double.tryParse(cleanValue) ?? 0;
               if (adjustment > 0) {
                 setState(() {
@@ -848,7 +882,8 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     completionDates: _budget.completionDates,
                     monthSalaryOverrides: _budget.monthSalaryOverrides,
                     monthItemOverridesParam: _budget.monthItemOverrides,
-                    monthItemAmountOverridesParam: _budget.monthItemAmountOverrides,
+                    monthItemAmountOverridesParam:
+                        _budget.monthItemAmountOverrides,
                     monthlyTransfers: _budget.monthlyTransfers,
                     closedMiscItems: _budget.closedMiscItems,
                   );
@@ -868,7 +903,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
   Future<void> _adjustItemAmount(BudgetItem item, String monthKey) async {
     final controller = TextEditingController();
     final numberFormat = NumberFormat('#,###');
-    final currentAmount = _budget.monthItemAmountOverrides[monthKey]?[item.id] ?? item.amount ?? 0.0;
+    final currentAmount =
+        _budget.monthItemAmountOverrides[monthKey]?[item.id] ??
+        item.amount ??
+        0.0;
 
     await showDialog(
       context: context,
@@ -913,11 +951,15 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              final cleanValue = controller.text.replaceAll(RegExp(r'[^\d]'), '');
+              final cleanValue = controller.text.replaceAll(
+                RegExp(r'[^\d]'),
+                '',
+              );
               final adjustment = double.tryParse(cleanValue) ?? 0;
               if (adjustment > 0) {
                 setState(() {
-                  final amounts = _budget.monthItemAmountOverrides[monthKey] ?? {};
+                  final amounts =
+                      _budget.monthItemAmountOverrides[monthKey] ?? {};
                   amounts[item.id] = currentAmount + adjustment;
                   _budget.monthItemAmountOverrides[monthKey] = amounts;
                 });
@@ -936,7 +978,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
   Future<void> _deduceItemAmount(BudgetItem item, String monthKey) async {
     final controller = TextEditingController();
     final numberFormat = NumberFormat('#,###');
-    final currentAmount = _budget.monthItemAmountOverrides[monthKey]?[item.id] ?? item.amount ?? 0.0;
+    final currentAmount =
+        _budget.monthItemAmountOverrides[monthKey]?[item.id] ??
+        item.amount ??
+        0.0;
 
     await showDialog(
       context: context,
@@ -982,11 +1027,15 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () {
-              final cleanValue = controller.text.replaceAll(RegExp(r'[^\d]'), '');
+              final cleanValue = controller.text.replaceAll(
+                RegExp(r'[^\d]'),
+                '',
+              );
               final deduction = double.tryParse(cleanValue) ?? 0;
               if (deduction > 0 && deduction <= currentAmount) {
                 setState(() {
-                  final amounts = _budget.monthItemAmountOverrides[monthKey] ?? {};
+                  final amounts =
+                      _budget.monthItemAmountOverrides[monthKey] ?? {};
                   amounts[item.id] = currentAmount - deduction;
                   _budget.monthItemAmountOverrides[monthKey] = amounts;
                 });
@@ -1005,10 +1054,15 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
   Future<void> _transferToItem(BudgetItem fromItem, String monthKey) async {
     final controller = TextEditingController();
     final numberFormat = NumberFormat('#,###');
-    final currentAmount = _budget.monthItemAmountOverrides[monthKey]?[fromItem.id] ?? fromItem.amount ?? 0.0;
+    final currentAmount =
+        _budget.monthItemAmountOverrides[monthKey]?[fromItem.id] ??
+        fromItem.amount ??
+        0.0;
 
     // Get other items that can receive the transfer (exclude the source item)
-    final otherItems = _budget.items.where((it) => it.id != fromItem.id).toList();
+    final otherItems = _budget.items
+        .where((it) => it.id != fromItem.id)
+        .toList();
 
     if (otherItems.isEmpty) {
       if (mounted) {
@@ -1037,36 +1091,52 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
               children: [
                 Text(
                   'Available: ${numberFormat.format(currentAmount)} Rwf',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<BudgetItem>(
                   initialValue: selectedItem,
                   decoration: const InputDecoration(
                     labelText: 'Transfer to',
-                    prefixIcon: Icon(Icons.arrow_forward, color: AppColors.lightGrey),
+                    prefixIcon: Icon(
+                      Icons.arrow_forward,
+                      color: AppColors.lightGrey,
+                    ),
                   ),
-                  items: otherItems.map((item) => DropdownMenuItem(
-                    value: item,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (item.isSaving) ...[
-                          const Icon(Icons.savings, size: 16, color: Colors.teal),
-                          const SizedBox(width: 6),
-                        ],
-                        Flexible(
-                          child: Text(
-                            item.name,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: item.isSaving ? Colors.teal : Colors.white,
-                            ),
+                  items: otherItems
+                      .map(
+                        (item) => DropdownMenuItem(
+                          value: item,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (item.isSaving) ...[
+                                const Icon(
+                                  Icons.savings,
+                                  size: 16,
+                                  color: Colors.teal,
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  item.name,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: item.isSaving
+                                        ? Colors.teal
+                                        : Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  )).toList(),
+                      )
+                      .toList(),
                   onChanged: (value) {
                     dialogSetState(() {
                       selectedItem = value;
@@ -1080,7 +1150,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     labelText: 'Amount to transfer',
                     hintText: 'Enter amount',
                     suffixText: 'Rwf',
-                    prefixIcon: Icon(Icons.swap_horiz, color: AppColors.lightGrey),
+                    prefixIcon: Icon(
+                      Icons.swap_horiz,
+                      color: AppColors.lightGrey,
+                    ),
                   ),
                   keyboardType: TextInputType.number,
                   onChanged: (value) {
@@ -1091,7 +1164,9 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     final formatted = numberFormat.format(number);
                     controller.value = TextEditingValue(
                       text: formatted,
-                      selection: TextSelection.collapsed(offset: formatted.length),
+                      selection: TextSelection.collapsed(
+                        offset: formatted.length,
+                      ),
                     );
                   },
                 ),
@@ -1107,7 +1182,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
               onPressed: () {
                 if (selectedItem == null) return;
-                final cleanValue = controller.text.replaceAll(RegExp(r'[^\d]'), '');
+                final cleanValue = controller.text.replaceAll(
+                  RegExp(r'[^\d]'),
+                  '',
+                );
                 final transferAmount = double.tryParse(cleanValue) ?? 0;
                 if (transferAmount > 0 && transferAmount <= currentAmount) {
                   final success = _budget.transferToItem(
@@ -1123,7 +1201,9 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     Navigator.of(ctx).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Transferred ${numberFormat.format(transferAmount)} Rwf to ${selectedItem!.name}'),
+                        content: Text(
+                          'Transferred ${numberFormat.format(transferAmount)} Rwf to ${selectedItem!.name}',
+                        ),
                         backgroundColor: Colors.teal,
                       ),
                     );
@@ -1186,7 +1266,10 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () {
-              final cleanValue = controller.text.replaceAll(RegExp(r'[^\d]'), '');
+              final cleanValue = controller.text.replaceAll(
+                RegExp(r'[^\d]'),
+                '',
+              );
               final deduction = double.tryParse(cleanValue) ?? 0;
               if (deduction > 0 && deduction <= _budget.amount) {
                 setState(() {
@@ -1201,7 +1284,8 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                     completionDates: _budget.completionDates,
                     monthSalaryOverrides: _budget.monthSalaryOverrides,
                     monthItemOverridesParam: _budget.monthItemOverrides,
-                    monthItemAmountOverridesParam: _budget.monthItemAmountOverrides,
+                    monthItemAmountOverridesParam:
+                        _budget.monthItemAmountOverrides,
                     monthlyTransfers: _budget.monthlyTransfers,
                     closedMiscItems: _budget.closedMiscItems,
                   );
@@ -1364,14 +1448,20 @@ class _BudgetDetailScreenState extends State<BudgetDetailScreen> {
                               title: Row(
                                 children: [
                                   if (it.isSaving) ...[
-                                    const Icon(Icons.savings, size: 16, color: Colors.teal),
+                                    const Icon(
+                                      Icons.savings,
+                                      size: 16,
+                                      color: Colors.teal,
+                                    ),
                                     const SizedBox(width: 6),
                                   ],
                                   Expanded(
                                     child: Text(
                                       it.name,
                                       style: TextStyle(
-                                        color: it.isSaving ? Colors.teal : Colors.white,
+                                        color: it.isSaving
+                                            ? Colors.teal
+                                            : Colors.white,
                                       ),
                                     ),
                                   ),
