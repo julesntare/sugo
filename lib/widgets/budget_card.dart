@@ -25,12 +25,27 @@ class BudgetCard extends StatelessWidget {
     final keys = budget.monthKeys();
 
     // Determine which month to show for remaining
+    // Use the salary-period key that contains 'now', not just the calendar month key,
+    // because the last salary period may span into the next calendar month.
     String keyForRemaining;
     bool isActive = false;
     bool isPast = false;
+    String activeKey = nowKey; // the key representing the current salary period
 
-    if (keys.contains(nowKey)) {
-      keyForRemaining = nowKey;
+    final bool withinBudgetPeriod =
+        !now.isBefore(budget.start) && !now.isAfter(budget.end);
+
+    if (withinBudgetPeriod) {
+      // Find the latest salary-period key whose salary date has already passed
+      String? found;
+      for (final key in keys) {
+        final salaryDate = budget.salaryDateForMonth(key);
+        if (!salaryDate.isAfter(now)) {
+          found = key;
+        }
+      }
+      activeKey = found ?? (keys.isNotEmpty ? keys.last : nowKey);
+      keyForRemaining = activeKey;
       isActive = true;
     } else if (now.isBefore(budget.start)) {
       keyForRemaining = keys.isNotEmpty ? keys.first : nowKey;
@@ -49,7 +64,7 @@ class BudgetCard extends StatelessWidget {
 
     // Calculate total months and months passed
     final totalMonths = keys.length;
-    final monthsPassed = keys.indexOf(nowKey) + 1;
+    final monthsPassed = keys.indexOf(activeKey) + 1;
     final monthsLeft = isActive ? totalMonths - monthsPassed : 0;
 
     return Card(
