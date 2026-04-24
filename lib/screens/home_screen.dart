@@ -44,6 +44,14 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isLoading = true);
     final list = await Storage.loadBudgets();
     if (!mounted) return;
+    final now = DateTime.now();
+    list.sort((a, b) {
+      final aActive = !now.isBefore(a.start) && !now.isAfter(a.end);
+      final bActive = !now.isBefore(b.start) && !now.isAfter(b.end);
+      if (aActive && !bActive) return -1;
+      if (!aActive && bActive) return 1;
+      return 0;
+    });
     setState(() {
       _budgets.clear();
       _budgets.addAll(list);
@@ -54,7 +62,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _createBudget() async {
     final budget = await showCreateBudgetDialog(context);
     if (budget != null) {
-      setState(() => _budgets.add(budget));
+      final now = DateTime.now();
+      _budgets.add(budget);
+      _budgets.sort((a, b) {
+        final aActive = !now.isBefore(a.start) && !now.isAfter(a.end);
+        final bActive = !now.isBefore(b.start) && !now.isAfter(b.end);
+        if (aActive && !bActive) return -1;
+        if (!aActive && bActive) return 1;
+        return 0;
+      });
+      setState(() {});
       await Storage.saveBudget(budget);
     }
   }

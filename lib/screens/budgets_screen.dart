@@ -20,7 +20,18 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
     final b = await Navigator.of(context).push<Budget>(
       MaterialPageRoute(builder: (_) => const CreateBudgetScreen()),
     );
-    if (b != null) setState(() => _budgets.add(b));
+    if (b != null) {
+      final now = DateTime.now();
+      _budgets.add(b);
+      _budgets.sort((a, c) {
+        final aActive = !now.isBefore(a.start) && !now.isAfter(a.end);
+        final cActive = !now.isBefore(c.start) && !now.isAfter(c.end);
+        if (aActive && !cActive) return -1;
+        if (!aActive && cActive) return 1;
+        return 0;
+      });
+      setState(() {});
+    }
     // persist after creating
     await Storage.saveBudgets(_budgets);
   }
@@ -31,6 +42,14 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
     // load persisted budgets
     Storage.loadBudgets().then((list) {
       if (!mounted) return;
+      final now = DateTime.now();
+      list.sort((a, b) {
+        final aActive = !now.isBefore(a.start) && !now.isAfter(a.end);
+        final bActive = !now.isBefore(b.start) && !now.isAfter(b.end);
+        if (aActive && !bActive) return -1;
+        if (!aActive && bActive) return 1;
+        return 0;
+      });
       setState(() {
         _budgets.clear();
         _budgets.addAll(list);
