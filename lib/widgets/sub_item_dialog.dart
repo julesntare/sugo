@@ -39,7 +39,7 @@ class _SubItemDialogState extends State<SubItemDialog> {
   final _descriptionCtrl = TextEditingController();
   String _frequency = 'once';
   DateTime? _startDate;
-  bool _markAsCompleted = false;
+  bool _markAsCompleted = true;
 
   @override
   void initState() {
